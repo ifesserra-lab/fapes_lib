@@ -138,7 +138,7 @@ Ordem recomendada:
 
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) | P1 | Ready | #17 | Exportadores JSON, JSONL e CSV na camada View. |
+| [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) | P1 | Done | #17 | Exportadores JSON, JSONL e CSV na camada View. |
 
 ## Fase 6: BDD, CI/CD E Documentacao Publica
 
@@ -155,7 +155,6 @@ Ordem recomendada:
 
 ### Ready
 
-- [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) TDD: implementar exportadores JSON, JSONL e CSV
 - [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) TEST: conectar features Gherkin a testes BDD
 
 ### Blocked
@@ -184,17 +183,16 @@ Nenhuma issue bloqueada no momento.
 - [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) Modelos e parser do envelope de resposta
 - [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) Cliente direto de consultas FAPES
 - [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17) Extrator de fluxos encadeados
+- [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) Exportadores JSON, JSONL e CSV
 - [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) Pipeline de qualidade com testes, lint e type check
 - [#24](https://github.com/ifesserra-lab/fapes_lib/issues/24) CD para build e publicacao no PyPI apos checks verdes
 - [#25](https://github.com/ifesserra-lab/fapes_lib/issues/25) Controller para complementar caminhos relativos de consulta
 
 ## Proxima Acao Recomendada
 
-Iniciar pela issue [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18), implementando exportadores JSON, JSONL e CSV com TDD.
+Iniciar pela issue [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19), conectando features Gherkin a testes BDD sem rede por padrao.
 
-Depois seguir para:
-
-1. [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19)
+Depois seguir para novas issues planejadas no GitHub.
 
 ## Regras De Atualizacao
 

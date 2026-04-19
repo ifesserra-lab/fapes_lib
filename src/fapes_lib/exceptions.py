@@ -36,6 +36,7 @@ __all__ = [
     "FapesConfigError",
     "FapesEnvelopeError",
     "FapesError",
+    "FapesExportError",
     "FapesExtractionError",
     "FapesRequestError",
     "FapesResponseError",
@@ -189,3 +190,7 @@ class FapesEnvelopeError(FapesError):
 
 class FapesExtractionError(FapesError):
     """Raised when a composed FAPES extraction flow fails."""
+
+
+class FapesExportError(FapesError):
+    """Raised when extracted FAPES data cannot be exported."""
