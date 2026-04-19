@@ -63,6 +63,11 @@ Com as credenciais corretas, a API retorna um objeto JSON com o token JWT:
 
 Esse token deve ser enviado no corpo JSON das consultas posteriores, no campo `token`.
 
+Na biblioteca, `FapesAuthenticator` envia `username` e `password` para
+`FAPES_AUTH_URL`, extrai o campo `token` da resposta e retorna um
+`FapesAuthToken`. O token fica disponivel em `FapesAuthToken.value`, mas suas
+representacoes textuais sao mascaradas para evitar vazamento em logs ou erros.
+
 Exemplo:
 
 ```json

@@ -27,6 +27,7 @@ O projeto ja possui a fundacao inicial da biblioteca Python:
 - configuracao via ambiente com `FapesSettings`;
 - excecoes de dominio com mascaramento de segredos;
 - transporte HTTP base com `FapesHttpClient`;
+- autenticacao com `FapesAuthenticator` e token mascarado em representacoes textuais;
 - CI com testes, lint, format check e type check;
 - CD para publicacao no PyPI quando uma release passar nos checks.
 

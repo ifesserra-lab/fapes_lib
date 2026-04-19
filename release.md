@@ -103,7 +103,7 @@ Criterio de saida:
 
 ### 0.2.0 - Autenticacao E Transporte HTTP
 
-Status: parcialmente implementada; transporte HTTP concluido e autenticacao pendente.
+Status: implementada no codigo; ainda nao publicada/tagueada.
 
 Issues relacionadas:
 

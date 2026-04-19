@@ -108,7 +108,7 @@ Ordem recomendada:
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
 | [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) | P0 | Done | #10, #12 | `FapesHttpClient` com `httpx`, timeout, JSON e erros encapsulados. |
-| [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) | P0 | Ready | #11, #12, #13 | `FapesAuthenticator` obtendo token JWT sem vazar segredo. |
+| [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) | P0 | Done | #11, #12, #13 | `FapesAuthenticator` obtendo token JWT sem vazar segredo. |
 | [#25](https://github.com/ifesserra-lab/fapes_lib/issues/25) | P0 | Done | #11, #13 | Controller para complementar `FAPES_BASE_URL` com caminhos relativos de consulta. |
 
 Ordem recomendada:
@@ -155,7 +155,6 @@ Ordem recomendada:
 
 ### Ready
 
-- [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) TDD: implementar FapesAuthenticator para gerar token JWT
 - [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) TDD: implementar modelos e parser do envelope de resposta
 
 ### Blocked
@@ -183,19 +182,20 @@ Ordem recomendada:
 - [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) Configuracao por ambiente com `FapesSettings`
 - [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) Excecoes de dominio e mascaramento de segredos
 - [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) Transporte HTTP com `FapesHttpClient`
+- [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) Autenticacao com `FapesAuthenticator`
 - [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) Pipeline de qualidade com testes, lint e type check
 - [#24](https://github.com/ifesserra-lab/fapes_lib/issues/24) CD para build e publicacao no PyPI apos checks verdes
 - [#25](https://github.com/ifesserra-lab/fapes_lib/issues/25) Controller para complementar caminhos relativos de consulta
 
 ## Proxima Acao Recomendada
 
-Iniciar pela issue [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14), implementando autenticacao com TDD e HTTP mockado.
+Iniciar pela issue [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15), implementando modelos e parser do envelope de resposta com TDD.
 
 Depois seguir para:
 
-1. [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15)
-2. [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16)
-3. [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17)
+1. [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16)
+2. [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17)
+3. [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18)
 
 ## Regras De Atualizacao
 
