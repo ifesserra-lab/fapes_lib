@@ -282,6 +282,41 @@ Para novas funcionalidades:
 8. Atualizar docstrings e documentacao tecnica se o comportamento publico mudar.
 9. Atualizar `docs/backlog.md` antes de encerrar se qualquer status, dependencia, prioridade ou proxima acao mudou.
 
+## Finalizacao De Release
+
+Quando uma release for finalizada, o agente deve obrigatoriamente commitar,
+enviar para o GitHub e publicar a release.
+
+Fluxo obrigatorio:
+
+1. Confirmar que a release tem issue ou marco rastreavel quando aplicavel.
+2. Confirmar que `docs/backlog.md` esta sincronizado com GitHub Issues.
+3. Atualizar a versao em `pyproject.toml`.
+4. Atualizar a versao em `src/fapes_lib/__init__.py`.
+5. Atualizar `release.md` com changelog, data, status e issues relacionadas.
+6. Atualizar README ou docs publicas quando a API ou processo de uso mudar.
+7. Rodar qualidade local:
+   - `python -m pytest`
+   - `python -m ruff check .`
+   - `python -m ruff format --check .`
+   - `python -m mypy src`
+8. Construir e validar artefatos:
+   - `python -m build`
+   - `python -m twine check --strict dist/*`
+9. Fazer commit de todas as mudancas da release.
+10. Fazer `git push origin main`.
+11. Criar e enviar tag semantica, por exemplo `v0.1.0`.
+12. Publicar uma GitHub Release a partir da tag.
+13. Aguardar o workflow `Publish Python Package`.
+14. Considerar a release concluida somente se o CI/CD passar e a publicacao for concluida.
+
+Regras de seguranca:
+
+- Nunca publicar release com testes, lint, formatacao, mypy, build ou `twine check` falhando.
+- Nunca publicar release com `.env`, senha, token JWT completo ou credenciais versionadas.
+- Nunca considerar release concluida se houver mudancas locais nao commitadas.
+- Se a publicacao falhar, corrigir em nova mudanca, commitar, fazer push e republicar conforme o fluxo.
+
 ## Comandos Esperados
 
 Quando o projeto Python for inicializado, manter comandos padrao documentados:

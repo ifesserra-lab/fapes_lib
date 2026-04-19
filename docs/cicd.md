@@ -77,12 +77,24 @@ python -m twine check --strict dist/*
 
 Depois disso:
 
-1. Criar uma tag semantica, por exemplo `v0.1.0`.
-2. Publicar uma GitHub Release a partir da tag.
-3. Aguardar o workflow `Publish Python Package`.
+1. Fazer commit de todas as mudancas da release.
+2. Fazer `git push origin main`.
+3. Criar uma tag semantica, por exemplo `v0.1.0`.
+4. Enviar a tag para o GitHub.
+5. Publicar uma GitHub Release a partir da tag.
+6. Aguardar o workflow `Publish Python Package`.
 
 Se qualquer etapa de teste, lint, formatacao, type check, build ou validacao de
 metadados falhar, a publicacao nao ocorre.
+
+Uma release so deve ser considerada finalizada quando:
+
+- todas as mudancas foram commitadas;
+- o push para o GitHub foi concluido;
+- a tag semantica existe no GitHub;
+- a GitHub Release foi publicada;
+- o workflow `Publish Python Package` concluiu com sucesso;
+- nao existem mudancas locais pendentes relacionadas a release.
 
 ## Seguranca
 
