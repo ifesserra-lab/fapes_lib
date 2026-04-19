@@ -109,6 +109,7 @@ Ordem recomendada:
 | --- | --- | --- | --- | --- |
 | [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) | P0 | Done | #10, #12 | `FapesHttpClient` com `httpx`, timeout, JSON e erros encapsulados. |
 | [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) | P0 | Ready | #11, #12, #13 | `FapesAuthenticator` obtendo token JWT sem vazar segredo. |
+| [#25](https://github.com/ifesserra-lab/fapes_lib/issues/25) | P0 | Done | #11, #13 | Controller para complementar `FAPES_BASE_URL` com caminhos relativos de consulta. |
 
 Ordem recomendada:
 
@@ -184,6 +185,7 @@ Ordem recomendada:
 - [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) Transporte HTTP com `FapesHttpClient`
 - [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) Pipeline de qualidade com testes, lint e type check
 - [#24](https://github.com/ifesserra-lab/fapes_lib/issues/24) CD para build e publicacao no PyPI apos checks verdes
+- [#25](https://github.com/ifesserra-lab/fapes_lib/issues/25) Controller para complementar caminhos relativos de consulta
 
 ## Proxima Acao Recomendada
 

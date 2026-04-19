@@ -169,6 +169,18 @@ Excecao documentada: `setores` aparece no Swagger retornando diretamente uma lis
 
 ## Catalogo De Endpoints
 
+Com `FAPES_BASE_URL` configurado como:
+
+```dotenv
+FAPES_BASE_URL="https://servicos.fapes.es.gov.br/webServicesSig/"
+```
+
+a camada de controllers complementa os caminhos usando o formato relativo
+`consulta.php/<funcao>`. Assim, a funcao `setores` gera o caminho
+`consulta.php/setores`, evitando duplicar `webServicesSig` na URL final.
+
+O payload deve manter `funcao` igual ao segmento final do endpoint.
+
 | Funcao | Endpoint | Corpo JSON |
 | --- | --- | --- |
 | `autenticacao` | `/webServicesSig/auth.php` | `username`, `password` |
