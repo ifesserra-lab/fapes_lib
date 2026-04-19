@@ -72,7 +72,7 @@ Fase 0: Planejamento documental
       -> Fase 3: Consultas diretas
         -> Fase 4: Extracao encadeada
           -> Fase 5: Exportacao
-            -> Fase 6: BDD, CI e documentacao publica
+            -> Fase 6: BDD, CI/CD e documentacao publica
 ```
 
 ## Fase 0: Planejamento Documental
@@ -139,7 +139,7 @@ Ordem recomendada:
 | --- | --- | --- | --- | --- |
 | [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) | P1 | Blocked | #17 | Exportadores JSON, JSONL e CSV na camada View. |
 
-## Fase 6: BDD, CI E Documentacao Publica
+## Fase 6: BDD, CI/CD E Documentacao Publica
 
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
@@ -148,6 +148,7 @@ Ordem recomendada:
 | [#21](https://github.com/ifesserra-lab/fapes_lib/issues/21) | P2 | Done | #1 a #9 | README raiz para uso publico do projeto. |
 | [#22](https://github.com/ifesserra-lab/fapes_lib/issues/22) | P2 | Done | Nenhuma | Licenca MIT adicionada ao repositorio. |
 | [#23](https://github.com/ifesserra-lab/fapes_lib/issues/23) | P2 | Done | Nenhuma | `release.md` com versoes e changelog. |
+| [#24](https://github.com/ifesserra-lab/fapes_lib/issues/24) | P2 | Done | #20 | CD para build e publicacao no PyPI quando os checks passarem. |
 
 ## Visao Kanban Atual
 
@@ -182,6 +183,7 @@ Ordem recomendada:
 - [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) Excecoes de dominio e mascaramento de segredos
 - [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) Transporte HTTP com `FapesHttpClient`
 - [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) Pipeline de qualidade com testes, lint e type check
+- [#24](https://github.com/ifesserra-lab/fapes_lib/issues/24) CD para build e publicacao no PyPI apos checks verdes
 
 ## Proxima Acao Recomendada
 

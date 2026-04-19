@@ -215,27 +215,34 @@ Criterio de saida:
 - Features principais conectadas a testes automatizados.
 - Dados sensiveis nao aparecem em arquivos gerados.
 
-### 0.6.0 - Qualidade E Automacao
+### 0.6.0 - Qualidade, Automacao E Publicacao
 
-Status: implementada antecipadamente; CI configurado antes das demais fases.
+Status: implementada antecipadamente; CI/CD configurado antes das demais fases.
 
-Issue relacionada:
+Issues relacionadas:
 
 - [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20)
+- [#24](https://github.com/ifesserra-lab/fapes_lib/issues/24)
 
 Changelog previsto:
 
 - Configurar pipeline de CI.
+- Configurar pipeline de CD para publicacao no PyPI.
 - Rodar `pytest`.
 - Rodar `ruff check`.
 - Rodar `ruff format --check`.
 - Rodar `mypy src` quando configurado.
+- Construir `sdist` e `wheel`.
+- Validar artefatos com `twine check --strict`.
+- Publicar via PyPI Trusted Publishing quando uma GitHub Release passar nos checks.
 - Garantir que testes de integracao real exigem opt-in.
 
 Criterio de saida:
 
 - CI passa em pull requests.
+- Publicacao depende de checks verdes.
 - `.env` nao e necessario no CI padrao.
+- Nenhum token PyPI e versionado.
 - Testes reais contra API nao rodam por padrao.
 
 ### 1.0.0 - API Publica Estavel

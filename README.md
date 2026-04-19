@@ -2,7 +2,7 @@
 
 Biblioteca Python para extracao de dados da API FAPES `webServicesSig`.
 
-O projeto esta em fase inicial de planejamento e sera desenvolvido com TDD estrito, orientacao a objetos, MVC adaptado para biblioteca Python, EPICs, User Stories e Gherkin.
+O projeto esta em desenvolvimento inicial e segue TDD estrito, orientacao a objetos, MVC adaptado para biblioteca Python, EPICs, User Stories e Gherkin.
 
 Repositorio publico:
 
@@ -21,16 +21,14 @@ https://github.com/ifesserra-lab/fapes_lib
 
 ## Status
 
-O projeto ainda nao possui implementacao de codigo de producao.
+O projeto ja possui a fundacao inicial da biblioteca Python:
 
-A etapa atual e a organizacao do desenvolvimento:
-
-- documentacao da API;
-- arquitetura;
-- EPICs;
-- cenarios Gherkin;
-- backlog de issues;
-- preparacao para implementacao com TDD.
+- pacote Python com layout `src/`;
+- configuracao via ambiente com `FapesSettings`;
+- excecoes de dominio com mascaramento de segredos;
+- transporte HTTP base com `FapesHttpClient`;
+- CI com testes, lint, format check e type check;
+- CD para publicacao no PyPI quando uma release passar nos checks.
 
 ## Documentacao
 
@@ -44,6 +42,7 @@ Documentos principais:
 - [Autenticacao](docs/autenticacao.md)
 - [Arquitetura](docs/architecture.md)
 - [Backlog de desenvolvimento](docs/backlog.md)
+- [CI/CD](docs/cicd.md)
 - [Releases e changelog](release.md)
 - [Notas detalhadas do Swagger](docs/fapes-webservices-sig-api.md)
 
