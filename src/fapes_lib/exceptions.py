@@ -36,6 +36,7 @@ __all__ = [
     "FapesConfigError",
     "FapesEnvelopeError",
     "FapesError",
+    "FapesExtractionError",
     "FapesRequestError",
     "FapesResponseError",
     "MASKED_VALUE",
@@ -184,3 +185,7 @@ class FapesResponseError(FapesError):
 
 class FapesEnvelopeError(FapesError):
     """Raised when a FAPES response envelope is invalid."""
+
+
+class FapesExtractionError(FapesError):
+    """Raised when a composed FAPES extraction flow fails."""

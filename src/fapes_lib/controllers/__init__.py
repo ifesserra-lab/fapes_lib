@@ -2,6 +2,12 @@
 
 from fapes_lib.controllers.api_client import FapesApiClient, FapesQueryExecutor
 from fapes_lib.controllers.authenticator import FapesAuthenticator, FapesAuthToken
+from fapes_lib.controllers.extractor import (
+    FapesExtractionApi,
+    FapesExtractionMetadata,
+    FapesExtractionResult,
+    FapesExtractor,
+)
 from fapes_lib.controllers.query_controller import (
     FapesQueryController,
     FapesQueryFunction,
@@ -12,6 +18,10 @@ __all__ = [
     "FapesApiClient",
     "FapesAuthenticator",
     "FapesAuthToken",
+    "FapesExtractionApi",
+    "FapesExtractionMetadata",
+    "FapesExtractionResult",
+    "FapesExtractor",
     "FapesQueryController",
     "FapesQueryExecutor",
     "FapesQueryFunction",
