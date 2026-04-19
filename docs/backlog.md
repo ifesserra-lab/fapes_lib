@@ -93,7 +93,7 @@ Fase 0: Planejamento documental
 
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) | P0 | Ready | #1 a #9 | Pacote Python inicial com `pyproject.toml`, layout `src/` e `tests/`. |
+| [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) | P0 | Done | #1 a #9 | Pacote Python inicial com `pyproject.toml`, layout `src/` e `tests/`. |
 | [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) | P0 | Ready | #10 | `FapesSettings` carregando configuracao por ambiente com TDD. |
 | [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) | P0 | Ready | #10 | Excecoes de dominio e mascaramento de segredos. |
 
@@ -153,7 +153,6 @@ Ordem recomendada:
 
 ### Ready
 
-- [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) CHORE: inicializar pacote Python com pyproject e layout src
 - [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) TDD: implementar FapesSettings para configuracao via ambiente
 - [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) TDD: implementar excecoes de dominio e mascaramento de segredos
 
@@ -182,17 +181,17 @@ Ordem recomendada:
 - [#21](https://github.com/ifesserra-lab/fapes_lib/issues/21) README raiz publico
 - [#22](https://github.com/ifesserra-lab/fapes_lib/issues/22) Licenca do projeto
 - [#23](https://github.com/ifesserra-lab/fapes_lib/issues/23) Releases e changelog
+- [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) Fundacao Python com `pyproject.toml` e layout `src/`
 
 ## Proxima Acao Recomendada
 
-Iniciar pela issue [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10), criando a fundacao Python do pacote.
+Iniciar pela issue [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11), implementando configuracao por ambiente com TDD.
 
 Depois seguir para:
 
-1. [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11)
-2. [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12)
-3. [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13)
-4. [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14)
+1. [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12)
+2. [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13)
+3. [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14)
 
 ## Regras De Atualizacao
 
