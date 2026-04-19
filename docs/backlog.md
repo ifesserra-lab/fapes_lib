@@ -145,7 +145,8 @@ Ordem recomendada:
 | --- | --- | --- | --- | --- |
 | [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) | P2 | Blocked | #14, #16 | Features Gherkin conectadas a testes BDD sem rede por padrao. |
 | [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) | P2 | Blocked | #10 | Pipeline de qualidade com testes, lint e type check. |
-| [#21](https://github.com/ifesserra-lab/fapes_lib/issues/21) | P2 | Ready | #1 a #9 | README raiz para uso publico do projeto. |
+| [#21](https://github.com/ifesserra-lab/fapes_lib/issues/21) | P2 | Done | #1 a #9 | README raiz para uso publico do projeto. |
+| [#22](https://github.com/ifesserra-lab/fapes_lib/issues/22) | P2 | Done | Nenhuma | Licenca MIT adicionada ao repositorio. |
 
 ## Visao Kanban Atual
 
@@ -154,7 +155,6 @@ Ordem recomendada:
 - [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) CHORE: inicializar pacote Python com pyproject e layout src
 - [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) TDD: implementar FapesSettings para configuracao via ambiente
 - [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) TDD: implementar excecoes de dominio e mascaramento de segredos
-- [#21](https://github.com/ifesserra-lab/fapes_lib/issues/21) DOC: melhorar README raiz para uso publico do projeto
 
 ### Blocked
 
@@ -178,6 +178,8 @@ Ordem recomendada:
 - [#7](https://github.com/ifesserra-lab/fapes_lib/issues/7) Feature de consultas
 - [#8](https://github.com/ifesserra-lab/fapes_lib/issues/8) Feature de extracao
 - [#9](https://github.com/ifesserra-lab/fapes_lib/issues/9) Feature de exportacao
+- [#21](https://github.com/ifesserra-lab/fapes_lib/issues/21) README raiz publico
+- [#22](https://github.com/ifesserra-lab/fapes_lib/issues/22) Licenca do projeto
 
 ## Proxima Acao Recomendada
 
@@ -206,4 +208,3 @@ Ao fechar uma issue por commit, usar mensagem com referencia:
 ```text
 Closes #NUMERO
 ```
-
