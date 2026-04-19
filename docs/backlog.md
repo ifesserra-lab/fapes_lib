@@ -120,8 +120,8 @@ Ordem recomendada:
 
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) | P1 | Ready | #12, #13 | Parser/modelos tolerantes para envelope e resposta de `setores`. |
-| [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) | P1 | Blocked | #14, #15 | `FapesApiClient` com metodos para todos os endpoints diretos. |
+| [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) | P1 | Done | #12, #13 | Parser/modelos tolerantes para envelope e resposta de `setores`. |
+| [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) | P1 | Ready | #14, #15 | `FapesApiClient` com metodos para todos os endpoints diretos. |
 
 Ordem recomendada:
 
@@ -155,11 +155,10 @@ Ordem recomendada:
 
 ### Ready
 
-- [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) TDD: implementar modelos e parser do envelope de resposta
+- [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) TDD: implementar FapesApiClient para consultas diretas
 
 ### Blocked
 
-- [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) TDD: implementar FapesApiClient para consultas diretas
 - [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17) TDD: implementar FapesExtractor para extracao encadeada
 - [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) TDD: implementar exportadores JSON, JSONL e CSV
 - [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) TEST: conectar features Gherkin a testes BDD
@@ -183,19 +182,20 @@ Ordem recomendada:
 - [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) Excecoes de dominio e mascaramento de segredos
 - [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) Transporte HTTP com `FapesHttpClient`
 - [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) Autenticacao com `FapesAuthenticator`
+- [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) Modelos e parser do envelope de resposta
 - [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) Pipeline de qualidade com testes, lint e type check
 - [#24](https://github.com/ifesserra-lab/fapes_lib/issues/24) CD para build e publicacao no PyPI apos checks verdes
 - [#25](https://github.com/ifesserra-lab/fapes_lib/issues/25) Controller para complementar caminhos relativos de consulta
 
 ## Proxima Acao Recomendada
 
-Iniciar pela issue [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15), implementando modelos e parser do envelope de resposta com TDD.
+Iniciar pela issue [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16), implementando `FapesApiClient` para consultas diretas com TDD.
 
 Depois seguir para:
 
-1. [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16)
-2. [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17)
-3. [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18)
+1. [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17)
+2. [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18)
+3. [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19)
 
 ## Regras De Atualizacao
 
