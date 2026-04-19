@@ -144,7 +144,7 @@ Ordem recomendada:
 
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) | P2 | Ready | #14, #16 | Features Gherkin conectadas a testes BDD sem rede por padrao. |
+| [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) | P2 | Done | #14, #16 | Features Gherkin conectadas a testes BDD sem rede por padrao. |
 | [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) | P2 | Done | #10 | Pipeline de qualidade com testes, lint e type check. |
 | [#21](https://github.com/ifesserra-lab/fapes_lib/issues/21) | P2 | Done | #1 a #9 | README raiz para uso publico do projeto. |
 | [#22](https://github.com/ifesserra-lab/fapes_lib/issues/22) | P2 | Done | Nenhuma | Licenca MIT adicionada ao repositorio. |
@@ -155,7 +155,7 @@ Ordem recomendada:
 
 ### Ready
 
-- [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) TEST: conectar features Gherkin a testes BDD
+Nenhuma issue pronta no momento.
 
 ### Blocked
 
@@ -184,15 +184,18 @@ Nenhuma issue bloqueada no momento.
 - [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) Cliente direto de consultas FAPES
 - [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17) Extrator de fluxos encadeados
 - [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) Exportadores JSON, JSONL e CSV
+- [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) Features Gherkin conectadas a testes BDD
 - [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) Pipeline de qualidade com testes, lint e type check
 - [#24](https://github.com/ifesserra-lab/fapes_lib/issues/24) CD para build e publicacao no PyPI apos checks verdes
 - [#25](https://github.com/ifesserra-lab/fapes_lib/issues/25) Controller para complementar caminhos relativos de consulta
 
 ## Proxima Acao Recomendada
 
-Iniciar pela issue [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19), conectando features Gherkin a testes BDD sem rede por padrao.
+Todas as issues planejadas neste backlog estao concluidas.
 
-Depois seguir para novas issues planejadas no GitHub.
+Proxima acao recomendada: abrir novas issues para empacotamento de release,
+documentacao de uso avancado, testes de integracao opcionais e evolucao da API
+publica de alto nivel.
 
 ## Regras De Atualizacao
 

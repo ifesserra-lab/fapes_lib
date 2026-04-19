@@ -49,6 +49,16 @@ where = ["src"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-ra"
+markers = [
+  "autenticacao: cenarios BDD de autenticacao",
+  "epic-001: cenarios vinculados ao EPIC-001",
+  "smoke: cenarios BDD principais",
+  "us-002: cenarios vinculados a US-002",
+  "us-003: cenarios vinculados a US-003",
+]
+filterwarnings = [
+  "ignore:'maxsplit' is passed as positional argument:DeprecationWarning:gherkin.gherkin_line",
+]
 
 [tool.ruff]
 line-length = 88
