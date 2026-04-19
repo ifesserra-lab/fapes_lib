@@ -95,7 +95,7 @@ Fase 0: Planejamento documental
 | --- | --- | --- | --- | --- |
 | [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) | P0 | Done | #1 a #9 | Pacote Python inicial com `pyproject.toml`, layout `src/` e `tests/`. |
 | [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) | P0 | Ready | #10 | `FapesSettings` carregando configuracao por ambiente com TDD. |
-| [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) | P0 | Ready | #10 | Excecoes de dominio e mascaramento de segredos. |
+| [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) | P0 | Done | #10 | Excecoes de dominio e mascaramento de segredos. |
 
 Ordem recomendada:
 
@@ -107,7 +107,7 @@ Ordem recomendada:
 
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) | P0 | Blocked | #10, #12 | `FapesHttpClient` com `httpx`, timeout, JSON e erros encapsulados. |
+| [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) | P0 | Ready | #10, #12 | `FapesHttpClient` com `httpx`, timeout, JSON e erros encapsulados. |
 | [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) | P0 | Blocked | #11, #12, #13 | `FapesAuthenticator` obtendo token JWT sem vazar segredo. |
 
 Ordem recomendada:
@@ -144,7 +144,7 @@ Ordem recomendada:
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
 | [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) | P2 | Blocked | #14, #16 | Features Gherkin conectadas a testes BDD sem rede por padrao. |
-| [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) | P2 | Blocked | #10 | Pipeline de qualidade com testes, lint e type check. |
+| [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) | P2 | Done | #10 | Pipeline de qualidade com testes, lint e type check. |
 | [#21](https://github.com/ifesserra-lab/fapes_lib/issues/21) | P2 | Done | #1 a #9 | README raiz para uso publico do projeto. |
 | [#22](https://github.com/ifesserra-lab/fapes_lib/issues/22) | P2 | Done | Nenhuma | Licenca MIT adicionada ao repositorio. |
 | [#23](https://github.com/ifesserra-lab/fapes_lib/issues/23) | P2 | Done | Nenhuma | `release.md` com versoes e changelog. |
@@ -154,18 +154,16 @@ Ordem recomendada:
 ### Ready
 
 - [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) TDD: implementar FapesSettings para configuracao via ambiente
-- [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) TDD: implementar excecoes de dominio e mascaramento de segredos
+- [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) TDD: implementar FapesHttpClient para transporte HTTP
 
 ### Blocked
 
-- [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) TDD: implementar FapesHttpClient para transporte HTTP
 - [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) TDD: implementar FapesAuthenticator para gerar token JWT
 - [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) TDD: implementar modelos e parser do envelope de resposta
 - [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) TDD: implementar FapesApiClient para consultas diretas
 - [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17) TDD: implementar FapesExtractor para extracao encadeada
 - [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) TDD: implementar exportadores JSON, JSONL e CSV
 - [#19](https://github.com/ifesserra-lab/fapes_lib/issues/19) TEST: conectar features Gherkin a testes BDD
-- [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) CI: configurar pipeline de qualidade
 
 ### Done
 
@@ -182,6 +180,8 @@ Ordem recomendada:
 - [#22](https://github.com/ifesserra-lab/fapes_lib/issues/22) Licenca do projeto
 - [#23](https://github.com/ifesserra-lab/fapes_lib/issues/23) Releases e changelog
 - [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) Fundacao Python com `pyproject.toml` e layout `src/`
+- [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) Excecoes de dominio e mascaramento de segredos
+- [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) Pipeline de qualidade com testes, lint e type check
 
 ## Proxima Acao Recomendada
 
@@ -189,9 +189,9 @@ Iniciar pela issue [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11), 
 
 Depois seguir para:
 
-1. [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12)
-2. [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13)
-3. [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14)
+1. [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13)
+2. [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14)
+3. [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15)
 
 ## Regras De Atualizacao
 
