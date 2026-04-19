@@ -12,6 +12,7 @@ Indice da documentacao do projeto `fapes_lib`.
 
 - [Arquitetura da biblioteca](architecture.md): proposta de arquitetura OO, MVC adaptado, TDD e anti-patterns evitados.
 - [Backlog de desenvolvimento](backlog.md): mapa das issues, prioridades, status e proximas entregas.
+- [Releases e changelog](../release.md): versoes planejadas, releases e changelog da biblioteca.
 
 ## EPICs
 

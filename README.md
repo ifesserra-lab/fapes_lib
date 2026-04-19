@@ -44,6 +44,7 @@ Documentos principais:
 - [Autenticacao](docs/autenticacao.md)
 - [Arquitetura](docs/architecture.md)
 - [Backlog de desenvolvimento](docs/backlog.md)
+- [Releases e changelog](release.md)
 - [Notas detalhadas do Swagger](docs/fapes-webservices-sig-api.md)
 
 EPICs:
@@ -115,6 +116,10 @@ mypy src
 O desenvolvimento sera gerenciado por GitHub Issues e pelo backlog documental:
 
 - [docs/backlog.md](docs/backlog.md)
+
+Releases, versoes e changelog:
+
+- [release.md](release.md)
 
 Issues iniciais de implementacao:
 
