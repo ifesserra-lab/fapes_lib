@@ -11,6 +11,7 @@ O agente deve assumir o papel de:
 - Especialista em integracao com APIs HTTP/JSON.
 - Especialista em TDD, arquitetura orientada a objetos e separacao por MVC.
 - Especialista em documentacao tecnica, EPICs, User Stories e Gherkin.
+- Especialista em documentacao de codigo para bibliotecas Python.
 
 ## Skills Obrigatorias
 
@@ -19,6 +20,7 @@ Use estas skills sempre que o trabalho tocar seus temas:
 - `test-driven-development`: obrigatoria para qualquer implementacao, bugfix ou refatoracao.
 - `software-architecture`: obrigatoria para decisoes de arquitetura, desenho OO, MVC e organizacao de modulos.
 - `technical-writing`: obrigatoria para documentacao tecnica, arquitetura, EPICs, User Stories e guias de uso.
+- `code-documentation`: obrigatoria para documentar API publica, modulos, classes, metodos, excecoes e exemplos de uso no codigo.
 - `playwright-bdd-gherkin-syntax`: obrigatoria para escrita de arquivos `.feature` em Gherkin.
 - `systematic-debugging`: obrigatoria quando houver bug, erro de teste, falha HTTP ou comportamento inesperado.
 
@@ -141,6 +143,22 @@ Quero <capacidade>
 Para <beneficio>
 ```
 
+### Backlog Sincronizado Com GitHub
+
+O arquivo `docs/backlog.md` deve estar sempre atualizado em relacao ao GitHub.
+
+Regras obrigatorias:
+
+- GitHub Issues e a fonte de verdade operacional do status das tarefas.
+- `docs/backlog.md` deve refletir issues abertas, fechadas, prontas, bloqueadas e concluidas.
+- Antes de finalizar qualquer tarefa que crie, feche, reabra, reordene ou desbloqueie uma issue, consultar o estado atual no GitHub.
+- Ao fechar uma issue por commit, PR ou comentario, mover a issue para `Done` no backlog.
+- Ao concluir uma dependencia, atualizar itens `Blocked` que ficaram `Ready`.
+- Ao criar uma nova issue no GitHub, adicionar a issue ao backlog na fase correta.
+- Ao alterar prioridade, dependencia, escopo ou proxima acao recomendada, atualizar o backlog na mesma rodada.
+- Se o GitHub e o backlog divergirem, corrigir `docs/backlog.md` antes de encerrar a tarefa.
+- Nao iniciar implementacao nova quando houver divergencia conhecida entre GitHub Issues e `docs/backlog.md`.
+
 ### Gherkin
 
 As regras de negocio e comportamentos esperados devem ser documentados em arquivos `.feature`.
@@ -196,6 +214,41 @@ Preferir ferramentas modernas:
 - Tratar erros com excecoes especificas do dominio.
 - Nao imprimir senha, token ou credenciais em logs, mensagens de erro ou testes.
 
+### Documentacao Do Codigo
+
+A skill `code-documentation` deve ser aplicada sempre que uma mudanca criar ou alterar comportamento publico da biblioteca.
+
+Objetivo:
+
+- Tornar o codigo compreensivel para consumidores da lib e para futuros mantenedores.
+- Explicar contratos publicos sem duplicar o que o codigo ja deixa obvio.
+- Manter exemplos, docstrings e documentacao externa alinhados aos testes.
+
+Regras obrigatorias:
+
+- Todo modulo publico deve ter docstring curta explicando sua responsabilidade na arquitetura.
+- Toda classe publica deve ter docstring com a intencao da classe e o papel dela na lib.
+- Todo metodo ou funcao publica deve declarar type hints e ter docstring quando seu comportamento, parametros, retorno ou erros nao forem triviais.
+- Docstrings de metodos publicos devem mencionar excecoes de dominio relevantes quando elas fizerem parte do contrato.
+- Comentarios inline devem ser raros e usados apenas para explicar decisao, regra de negocio ou trecho nao obvio.
+- Nao escrever comentarios que apenas narram a linha seguinte.
+- Exemplos em docstrings ou docs devem usar placeholders para credenciais e tokens.
+- Nunca colocar senha, token real, JWT completo ou payload sensivel em docstring, comentario ou exemplo.
+- Quando uma API publica mudar, atualizar tambem `README.md`, `docs/api.md` ou documento equivalente quando aplicavel.
+- A documentacao de codigo deve refletir o comportamento coberto pelos testes; se a docstring prometer algo, deve existir teste correspondente quando houver risco funcional.
+
+Padrao recomendado para docstrings publicas:
+
+```python
+def listar_setores(self) -> list[Setor]:
+    """List FAPES sectors available for queries.
+
+    Raises:
+        FapesRequestError: When the HTTP request cannot be completed.
+        FapesResponseError: When the API response cannot be parsed.
+    """
+```
+
 ## Seguranca E Credenciais
 
 Credenciais devem ficar em `.env` e nunca devem ser versionadas.
@@ -219,13 +272,15 @@ Regras:
 
 Para novas funcionalidades:
 
-1. Atualizar ou criar EPIC/User Story quando necessario.
-2. Criar ou atualizar arquivo `.feature` em Gherkin.
-3. Escrever teste unitario/integracao que falha.
-4. Implementar o minimo necessario.
-5. Rodar testes.
-6. Refatorar mantendo testes verdes.
-7. Atualizar documentacao tecnica se o comportamento publico mudar.
+1. Consultar GitHub Issues e confirmar que `docs/backlog.md` esta sincronizado.
+2. Atualizar ou criar EPIC/User Story quando necessario.
+3. Criar ou atualizar arquivo `.feature` em Gherkin.
+4. Escrever teste unitario/integracao que falha.
+5. Implementar o minimo necessario.
+6. Rodar testes.
+7. Refatorar mantendo testes verdes.
+8. Atualizar docstrings e documentacao tecnica se o comportamento publico mudar.
+9. Atualizar `docs/backlog.md` antes de encerrar se qualquer status, dependencia, prioridade ou proxima acao mudou.
 
 ## Comandos Esperados
 
