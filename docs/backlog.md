@@ -94,7 +94,7 @@ Fase 0: Planejamento documental
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
 | [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) | P0 | Done | #1 a #9 | Pacote Python inicial com `pyproject.toml`, layout `src/` e `tests/`. |
-| [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) | P0 | Ready | #10 | `FapesSettings` carregando configuracao por ambiente com TDD. |
+| [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) | P0 | Done | #10 | `FapesSettings` carregando configuracao por ambiente com TDD. |
 | [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) | P0 | Done | #10 | Excecoes de dominio e mascaramento de segredos. |
 
 Ordem recomendada:
@@ -107,8 +107,8 @@ Ordem recomendada:
 
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) | P0 | Ready | #10, #12 | `FapesHttpClient` com `httpx`, timeout, JSON e erros encapsulados. |
-| [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) | P0 | Blocked | #11, #12, #13 | `FapesAuthenticator` obtendo token JWT sem vazar segredo. |
+| [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) | P0 | Done | #10, #12 | `FapesHttpClient` com `httpx`, timeout, JSON e erros encapsulados. |
+| [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) | P0 | Ready | #11, #12, #13 | `FapesAuthenticator` obtendo token JWT sem vazar segredo. |
 
 Ordem recomendada:
 
@@ -119,7 +119,7 @@ Ordem recomendada:
 
 | Issue | Prioridade | Status | Dependencias | Resultado esperado |
 | --- | --- | --- | --- | --- |
-| [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) | P1 | Blocked | #12, #13 | Parser/modelos tolerantes para envelope e resposta de `setores`. |
+| [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) | P1 | Ready | #12, #13 | Parser/modelos tolerantes para envelope e resposta de `setores`. |
 | [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) | P1 | Blocked | #14, #15 | `FapesApiClient` com metodos para todos os endpoints diretos. |
 
 Ordem recomendada:
@@ -153,13 +153,11 @@ Ordem recomendada:
 
 ### Ready
 
-- [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) TDD: implementar FapesSettings para configuracao via ambiente
-- [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) TDD: implementar FapesHttpClient para transporte HTTP
+- [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) TDD: implementar FapesAuthenticator para gerar token JWT
+- [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) TDD: implementar modelos e parser do envelope de resposta
 
 ### Blocked
 
-- [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14) TDD: implementar FapesAuthenticator para gerar token JWT
-- [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15) TDD: implementar modelos e parser do envelope de resposta
 - [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16) TDD: implementar FapesApiClient para consultas diretas
 - [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17) TDD: implementar FapesExtractor para extracao encadeada
 - [#18](https://github.com/ifesserra-lab/fapes_lib/issues/18) TDD: implementar exportadores JSON, JSONL e CSV
@@ -180,18 +178,20 @@ Ordem recomendada:
 - [#22](https://github.com/ifesserra-lab/fapes_lib/issues/22) Licenca do projeto
 - [#23](https://github.com/ifesserra-lab/fapes_lib/issues/23) Releases e changelog
 - [#10](https://github.com/ifesserra-lab/fapes_lib/issues/10) Fundacao Python com `pyproject.toml` e layout `src/`
+- [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11) Configuracao por ambiente com `FapesSettings`
 - [#12](https://github.com/ifesserra-lab/fapes_lib/issues/12) Excecoes de dominio e mascaramento de segredos
+- [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13) Transporte HTTP com `FapesHttpClient`
 - [#20](https://github.com/ifesserra-lab/fapes_lib/issues/20) Pipeline de qualidade com testes, lint e type check
 
 ## Proxima Acao Recomendada
 
-Iniciar pela issue [#11](https://github.com/ifesserra-lab/fapes_lib/issues/11), implementando configuracao por ambiente com TDD.
+Iniciar pela issue [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14), implementando autenticacao com TDD e HTTP mockado.
 
 Depois seguir para:
 
-1. [#13](https://github.com/ifesserra-lab/fapes_lib/issues/13)
-2. [#14](https://github.com/ifesserra-lab/fapes_lib/issues/14)
-3. [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15)
+1. [#15](https://github.com/ifesserra-lab/fapes_lib/issues/15)
+2. [#16](https://github.com/ifesserra-lab/fapes_lib/issues/16)
+3. [#17](https://github.com/ifesserra-lab/fapes_lib/issues/17)
 
 ## Regras De Atualizacao
 

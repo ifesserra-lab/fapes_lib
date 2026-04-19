@@ -29,8 +29,8 @@ Enquanto a lib estiver em `0.x`, a API publica ainda podera mudar entre releases
 | Campo | Valor |
 | --- | --- |
 | Versao atual | `0.0.0` |
-| Estado | Planejamento e documentacao |
-| Pacote Python | Ainda nao inicializado |
+| Estado | Desenvolvimento inicial da biblioteca |
+| Pacote Python | Inicializado com layout `src/` |
 | Publicacao PyPI | Ainda nao publicada |
 | API publica estavel | Ainda nao |
 
@@ -75,7 +75,7 @@ Observacoes:
 
 ### 0.1.0 - Fundacao Do Pacote Python
 
-Status: planejada.
+Status: implementada no codigo; ainda nao publicada/tagueada.
 
 Issues relacionadas:
 
@@ -103,7 +103,7 @@ Criterio de saida:
 
 ### 0.2.0 - Autenticacao E Transporte HTTP
 
-Status: planejada.
+Status: parcialmente implementada; transporte HTTP concluido e autenticacao pendente.
 
 Issues relacionadas:
 
@@ -217,7 +217,7 @@ Criterio de saida:
 
 ### 0.6.0 - Qualidade E Automacao
 
-Status: planejada.
+Status: implementada antecipadamente; CI configurado antes das demais fases.
 
 Issue relacionada:
 
@@ -292,4 +292,3 @@ Notas de migracao:
 - Mudancas publicas devem atualizar README e docs quando necessario.
 - Releases publicadas devem ser tagueadas no Git.
 - Releases nao devem conter `.env`, senha, token JWT ou credenciais reais.
-
