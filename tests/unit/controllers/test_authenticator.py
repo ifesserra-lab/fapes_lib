@@ -5,11 +5,12 @@ from typing import Any
 import pytest
 
 from fapes_lib.exceptions import FapesAuthenticationError, FapesResponseError
+from fapes_lib.infrastructure.http_client import JsonValue
 from fapes_lib.settings import FapesSettings
 
 
 class RecordingHttpClient:
-    def __init__(self, response: dict[str, Any] | None = None) -> None:
+    def __init__(self, response: JsonValue = None) -> None:
         self.response = response if response is not None else {"token": "jwt-token"}
         self.requests: list[tuple[str, dict[str, Any]]] = []
 
@@ -17,9 +18,10 @@ class RecordingHttpClient:
         self,
         endpoint: str,
         *,
-        json: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        self.requests.append((endpoint, json or {}))
+        json: JsonValue = None,
+    ) -> JsonValue:
+        request_payload = json if isinstance(json, dict) else {}
+        self.requests.append((endpoint, request_payload))
         return self.response
 
 
@@ -28,15 +30,16 @@ class FailingHttpClient:
         self,
         endpoint: str,
         *,
-        json: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+        json: JsonValue = None,
+    ) -> JsonValue:
+        request_payload = json if isinstance(json, dict) else {}
         raise FapesResponseError(
             "FAPES response returned an invalid HTTP status",
             context={
                 "endpoint": endpoint,
                 "status_code": 401,
                 "response_body": "password=invalid-secret token=invalid-token",
-                "payload": json or {},
+                "payload": request_payload,
             },
         )
 

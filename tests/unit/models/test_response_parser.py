@@ -29,6 +29,26 @@ def test_parse_standard_response_envelope_preserves_metadata_and_extras() -> Non
     assert response.extra == {"tempo_execucao": "10ms"}
 
 
+def test_parse_direct_object_response_envelope() -> None:
+    from fapes_lib.models.responses import FapesResponseEnvelope
+
+    response = FapesResponseEnvelope.parse(
+        {
+            "data": [{"edital_id": "610", "edital_nome": "Edital"}],
+            "encontrado": 1,
+            "msg": "Lista de todos os editais da Fapes",
+            "erro": "",
+            "qtd": 1,
+        },
+    )
+
+    assert response.data == [{"edital_id": "610", "edital_nome": "Edital"}]
+    assert response.encontrado == 1
+    assert response.msg == "Lista de todos os editais da Fapes"
+    assert response.erro == ""
+    assert response.qtd == 1
+
+
 def test_parse_direct_setores_response_without_envelope() -> None:
     from fapes_lib.models.responses import FapesResponseEnvelope
 

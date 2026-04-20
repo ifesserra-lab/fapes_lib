@@ -36,13 +36,23 @@ Uso recomendado:
 - cada novo fluxo relevante deve ter primeiro uma User Story ou cenario Gherkin, quando aplicavel;
 - os steps devem chamar a API publica da biblioteca, nao detalhes internos desnecessarios.
 
-## Cenario Inicial Conectado
+## Cenarios Conectados
 
-O primeiro cenario conectado e:
+Os cenarios conectados ate aqui sao:
 
 ```text
 docs/features/autenticacao.feature
   Cenario: Autenticacao com sucesso
+
+docs/features/extracao_dados.feature
+  Cenario: Extrair cadastros auxiliares
+  Cenario: Extrair editais com chamadas
+  Cenario: Extrair editais com projetos
+  Cenario: Extrair projetos com bolsas e bolsistas
+  Cenario: Executar extracao completa em ordem previsivel
+  Cenario: Falha em consulta encadeada
+  Cenario: Extracao sem dados encontrados
 ```
 
-Ele usa um cliente HTTP fake, retorna um token ficticio e confirma que a autenticacao fica em memoria sem expor o token completo em mensagens publicas.
+Eles usam clientes fake, nao dependem de rede real e validam que tokens ou senhas
+ficticias nao aparecem em mensagens publicas de erro.

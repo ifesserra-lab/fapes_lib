@@ -111,6 +111,77 @@ ruff format --check .
 mypy src
 ```
 
+Teste de integracao real, protegido por opt-in explicito:
+
+```bash
+FAPES_RUN_INTEGRATION=1 FAPES_INTEGRATION_LIMIT=3 pytest -q tests/integration/test_real_editais_projetos.py
+```
+
+Sem `FAPES_RUN_INTEGRATION=1`, o teste real e ignorado.
+
+## Extracao Paralela Por Edital
+
+Para baixar os projetos de cada edital em paralelo e gravar um arquivo JSON por
+edital:
+
+```python
+from fapes_lib.controllers import FapesExtractor
+
+extractor = FapesExtractor(api_client=api_client)
+resultado = extractor.extrair_projetos_dos_editais_em_threads(
+    destination_dir="downloads/projetos_por_edital",
+    max_workers=8,
+)
+```
+
+O metodo consulta `listar_editais` uma vez, dispara tarefas para consultar
+`listar_projetos:<edital_id>` e salva arquivos como
+`edital_756_projetos.json`. O resultado retorna os editais enriquecidos com
+`projetos` e `arquivo_projetos`, alem de metadados com contagem de `editais`,
+`projetos` e `arquivos`. Sem `max_workers`, uma tarefa e criada para cada
+edital; informe um limite para reduzir conexoes simultaneas contra a API real.
+
+Tambem ha um script em `scripts/` para baixar os projetos de todos os editais
+usando as credenciais da `.env`:
+
+```bash
+python scripts/main.py --output-dir downloads/projetos_por_edital --max-workers 4 --retries 2 --skip-existing
+```
+
+Para gerar o relatorio agregado por `instituicao_nome` e `instituicao_sigla`,
+somando a quantidade de bolsas e o orcamento contratado:
+
+```bash
+python scripts/report.py --input-dir downloads/projetos_por_edital --output downloads/relatorio_instituicoes.csv
+```
+
+Para abrir o dashboard Streamlit com os JSONs baixados:
+
+```bash
+pip install -e ".[dashboard]"
+streamlit run scripts/dashboard.py
+```
+
+## Logging
+
+A biblioteca usa o modulo `logging` da biblioteca padrao e nao configura handlers
+globais. Consumidores podem injetar um logger no extrator:
+
+```python
+import logging
+
+from fapes_lib.controllers import FapesExtractor
+
+logger = logging.getLogger("fapes_lib.extracao")
+extractor = FapesExtractor(api_client=api_client, logger=logger)
+resultado = extractor.extrair_editais_com_projetos()
+```
+
+Cada etapa de extracao emite eventos com campos extras `fapes_event` e
+`fapes_step`, como `step_started`, `step_finished`, `step_failed` e
+`listar_projetos:756`. Logs de falha nao incluem senha, token ou contexto bruto
+da resposta.
+
 ## Backlog
 
 O desenvolvimento sera gerenciado por GitHub Issues e pelo backlog documental:

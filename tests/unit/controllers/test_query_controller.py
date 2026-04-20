@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
 
 from fapes_lib.exceptions import FapesRequestError
+from fapes_lib.infrastructure.http_client import JsonValue
 
 
 class RecordingHttpClient:
@@ -15,9 +17,11 @@ class RecordingHttpClient:
         self,
         endpoint: str,
         *,
-        json: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        self.requests.append((endpoint, json or {}))
+        json: JsonValue = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> JsonValue:
+        request_payload = json if isinstance(json, dict) else {}
+        self.requests.append((endpoint, request_payload))
         return {"ok": True}
 
 

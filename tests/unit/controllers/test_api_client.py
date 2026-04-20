@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
@@ -36,9 +37,11 @@ class RecordingHttpClient:
         self,
         endpoint: str,
         *,
-        json: dict[str, Any] | None = None,
+        json: JsonValue = None,
+        headers: Mapping[str, str] | None = None,
     ) -> JsonValue:
-        self.requests.append((endpoint, json or {}))
+        request_payload = json if isinstance(json, dict) else {}
+        self.requests.append((endpoint, request_payload))
         return [
             {
                 "data": [],

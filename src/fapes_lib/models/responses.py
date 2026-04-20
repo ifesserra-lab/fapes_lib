@@ -77,6 +77,9 @@ class FapesResponseEnvelope:
 
 
 def _extract_single_envelope(payload: object) -> Mapping[str, Any]:
+    if isinstance(payload, Mapping):
+        return _validate_envelope(payload, payload)
+
     sequence = _as_sequence(payload)
     if len(sequence) != 1:
         raise _invalid_envelope(
@@ -91,6 +94,13 @@ def _extract_single_envelope(payload: object) -> Mapping[str, Any]:
             payload,
         )
 
+    return _validate_envelope(envelope, payload)
+
+
+def _validate_envelope(
+    envelope: Mapping[object, object],
+    payload: object,
+) -> Mapping[str, Any]:
     missing = sorted(_ENVELOPE_KEYS.difference(str(key) for key in envelope))
     if missing:
         raise _invalid_envelope(
@@ -99,7 +109,7 @@ def _extract_single_envelope(payload: object) -> Mapping[str, Any]:
             missing=missing,
         )
 
-    return envelope
+    return {str(key): value for key, value in envelope.items()}
 
 
 def _copy_object(value: object, label: str) -> JsonObject:

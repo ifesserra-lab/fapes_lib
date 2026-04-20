@@ -1,0 +1,1481 @@
+"""Streamlit dashboard for downloaded FAPES edital project JSON files."""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+from importlib import import_module
+from pathlib import Path
+from typing import Any, Final, TypeAlias, cast
+
+from scripts.budget_categories import load_budget_categories
+from scripts.project_details import (
+    build_project_timeline,
+    load_project_details,
+    load_researcher_project_details,
+)
+from scripts.report import (
+    _is_not_contracted_status as _report_is_not_contracted_status,
+)
+from scripts.report import (
+    excluded_project_status_labels,
+    generate_excluded_projects_audit,
+    generate_report,
+)
+from scripts.scholarship_details import load_scholarship_details
+
+ReportRow: TypeAlias = dict[str, object]
+
+_DEFAULT_INPUT_DIR: Final = Path("downloads/projetos_por_edital")
+_DEFAULT_TOP_N: Final = 15
+_BUDGET_CATEGORY_COLUMN = "categoria_orcamento"
+_BUDGET_COLUMN = "orcamento_contratado"
+_BUDGET_TOOLTIP_COLUMN = "orcamento_contratado_tooltip"
+_BUDGET_VALUE_COLUMN = "orcamento_contratado_valor"
+_CHART_LABEL_COLUMN = "valor_total"
+_SCHOLARSHIPS_COLUMN = "quantidade_bolsas"
+_SCHOLARSHIP_AMOUNT_COLUMN = "valor_bolsas"
+_SCHOLARSHIP_AMOUNT_TOOLTIP_COLUMN = "valor_bolsas_tooltip"
+_SCHOLARSHIP_AMOUNT_VALUE_COLUMN = "valor_bolsas_valor"
+_SCHOLARSHIP_TYPE_COLUMN = "tipo_bolsa"
+_PROJECTS_COLUMN = "total_projetos"
+_FINANCIAL_VOLUME_TYPE_COLUMN = "tipo_volume_financeiro"
+_FINANCIAL_VOLUME_VALUE_COLUMN = "valor_financeiro"
+_UNKNOWN_INSTITUTION = "Sem informacao"
+_NO_MATCH_INSTITUTION_LABEL = "__sem_instituicao__"
+_TOOLTIP_FIELD_GROUPS: Final = (
+    ((_CHART_LABEL_COLUMN,), "Total"),
+    ((_PROJECTS_COLUMN,), "Projetos"),
+    ((_SCHOLARSHIPS_COLUMN,), "Bolsas"),
+    ((_SCHOLARSHIP_AMOUNT_TOOLTIP_COLUMN, _SCHOLARSHIP_AMOUNT_COLUMN), "Valor bolsas"),
+    ((_BUDGET_TOOLTIP_COLUMN, _BUDGET_COLUMN), "Orcamento"),
+)
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardData:
+    input_dir: Path
+    file_count: int
+    institution_rows: list[ReportRow]
+    excluded_project_count: int
+    excluded_project_rows: list[ReportRow]
+    total_institutions: int
+    total_projects: int
+    total_scholarships: int
+    total_scholarship_amount: str
+    total_budget: str
+
+
+@dataclass(frozen=True, slots=True)
+class DashboardTotals:
+    total_institutions: int
+    total_projects: int
+    total_scholarships: int
+    total_scholarship_amount: str
+    total_budget: str
+
+
+def load_dashboard_data(
+    input_dir: str | Path = _DEFAULT_INPUT_DIR,
+    *,
+    include_excluded_projects: bool = False,
+) -> DashboardData:
+    """Load aggregated dashboard data from downloaded edital project JSON files."""
+
+    path = Path(input_dir)
+    rows = top_rows(
+        generate_report(
+            path,
+            include_excluded_projects=include_excluded_projects,
+        ),
+        _BUDGET_COLUMN,
+        limit=None,
+    )
+    excluded_project_rows = generate_excluded_projects_audit(path)
+    totals = _summary_totals(rows)
+
+    return DashboardData(
+        input_dir=path,
+        file_count=len(list(path.glob("*.json"))),
+        institution_rows=rows,
+        excluded_project_count=len(excluded_project_rows),
+        excluded_project_rows=excluded_project_rows,
+        total_institutions=totals.total_institutions,
+        total_projects=totals.total_projects,
+        total_scholarships=totals.total_scholarships,
+        total_scholarship_amount=totals.total_scholarship_amount,
+        total_budget=totals.total_budget,
+    )
+
+
+def filter_rows(rows: Sequence[Mapping[str, object]], query: str) -> list[ReportRow]:
+    """Filter institution rows by name or acronym."""
+
+    normalized_query = query.casefold().strip()
+    if not normalized_query:
+        return [dict(row) for row in rows]
+
+    filtered: list[ReportRow] = []
+    for row in rows:
+        name = str(row.get("instituicao_nome", "")).casefold()
+        acronym = str(row.get("instituicao_sigla", "")).casefold()
+        if normalized_query in name or normalized_query in acronym:
+            filtered.append(dict(row))
+
+    return filtered
+
+
+def institution_options(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    """Return institution name/acronym labels for list-based filtering."""
+
+    labels = {_institution_label(row) for row in rows}
+    return sorted(labels, key=str.casefold)
+
+
+def filter_selected_institutions(
+    rows: Sequence[Mapping[str, object]],
+    selected_options: Sequence[str],
+) -> list[ReportRow]:
+    """Filter rows by selected institution name/acronym labels."""
+
+    if not selected_options:
+        return [dict(row) for row in rows]
+
+    selected = set(selected_options)
+    return [dict(row) for row in rows if _institution_label(row) in selected]
+
+
+def top_rows(
+    rows: Sequence[Mapping[str, object]],
+    metric: str,
+    limit: int | None,
+) -> list[ReportRow]:
+    """Return rows sorted by the selected numeric metric in descending order."""
+
+    ordered = sorted(
+        (dict(row) for row in rows),
+        key=lambda row: _decimal(row.get(metric)),
+        reverse=True,
+    )
+    if limit is None:
+        return ordered
+
+    return ordered[:limit]
+
+
+def run_app() -> None:
+    """Render the Streamlit application."""
+
+    alt = cast(Any, import_module("altair"))
+    pd = cast(Any, import_module("pandas"))
+    st = cast(Any, import_module("streamlit"))
+
+    st.set_page_config(
+        page_title="FAPES - Projetos Por Instituicao",
+        page_icon="chart_with_upwards_trend",
+        layout="wide",
+    )
+
+    st.title("FAPES - Projetos Por Instituicao")
+    st.caption("Dados carregados dos JSONs baixados por edital.")
+
+    with st.sidebar:
+        st.header("Navegacao")
+        page_label = st.radio(
+            "Pagina",
+            options=("Resumo", "Detalhes da instituicao", "Projetos por pesquisador"),
+        )
+        st.header("Dados")
+        input_dir = Path(
+            st.text_input(
+                "Diretorio dos JSONs",
+                value=str(_DEFAULT_INPUT_DIR),
+            )
+        )
+        show_chart_values = bool(
+            st.toggle(
+                "Mostrar valores nos graficos",
+                value=True,
+            )
+        )
+        project_scope_label = st.radio(
+            "Base dos projetos",
+            options=("Somente contratados", "Todos os projetos"),
+        )
+
+    include_excluded_projects = str(project_scope_label) == "Todos os projetos"
+    data = load_dashboard_data(
+        input_dir,
+        include_excluded_projects=include_excluded_projects,
+    )
+    if not data.institution_rows:
+        st.warning(f"Nenhum JSON encontrado em {data.input_dir}.")
+        return
+
+    if page_label == "Detalhes da instituicao":
+        _render_institution_detail_page(
+            st,
+            pd,
+            alt,
+            data.input_dir,
+            data.institution_rows,
+            include_excluded_projects=include_excluded_projects,
+            show_chart_values=show_chart_values,
+        )
+        return
+
+    if page_label == "Projetos por pesquisador":
+        _render_researcher_page(
+            st,
+            pd,
+            alt,
+            data.input_dir,
+            include_excluded_projects=include_excluded_projects,
+            show_chart_values=show_chart_values,
+        )
+        return
+
+    _render_summary_page(
+        st,
+        pd,
+        alt,
+        data,
+        include_excluded_projects=include_excluded_projects,
+        show_chart_values=show_chart_values,
+    )
+
+
+def _render_summary_page(
+    st: Any,
+    pd: Any,
+    alt: Any,
+    data: DashboardData,
+    *,
+    include_excluded_projects: bool,
+    show_chart_values: bool,
+) -> None:
+    with st.sidebar:
+        st.header("Filtros")
+        include_unknown_institutions = bool(
+            st.toggle(
+                "Incluir Sem informacao",
+                value=False,
+                key="summary_include_unknown_institutions",
+            )
+        )
+        institution_query = st.text_input("Buscar instituicao")
+        top_n = st.slider("Top instituicoes", min_value=5, max_value=50, value=15)
+        metric_label = st.selectbox(
+            "Ordenar rankings por",
+            options=(
+                "Orcamento contratado",
+                "Quantidade de bolsas",
+                "Bolsas concedidas financeiro",
+                "Total de projetos",
+            ),
+        )
+        available_rows = _available_institution_rows(
+            data.institution_rows,
+            include_unknown_institutions,
+            institution_query,
+        )
+        selected_institutions = st.multiselect(
+            "Instituicao e sigla",
+            options=institution_options(available_rows),
+            placeholder="Selecione uma ou mais instituicoes",
+        )
+
+    metric = _metric_from_label(str(metric_label))
+    filtered_rows = filter_selected_institutions(
+        available_rows,
+        selected_institutions,
+    )
+    ranking_rows = top_rows(filtered_rows, metric, top_n)
+    summary_totals = _summary_totals(filtered_rows)
+    budget_category_labels = _detail_filter_labels(
+        filtered_rows,
+        selected_institutions,
+        include_unknown_institutions,
+        bool(institution_query.strip()),
+    )
+    budget_category_rows = load_budget_categories(
+        data.input_dir,
+        budget_category_labels,
+        include_excluded_projects=include_excluded_projects,
+    )
+
+    metric_columns = st.columns(7)
+    metric_columns[0].metric("Arquivos JSON", data.file_count)
+    metric_columns[1].metric("Instituicoes", summary_totals.total_institutions)
+    metric_columns[2].metric("Projetos", summary_totals.total_projects)
+    metric_columns[3].metric("Projetos excluidos", data.excluded_project_count)
+    metric_columns[4].metric("Bolsas", summary_totals.total_scholarships)
+    metric_columns[5].metric(
+        "Valor bolsas",
+        _currency_label(summary_totals.total_scholarship_amount),
+    )
+    metric_columns[6].metric("Orcamento", _currency_label(summary_totals.total_budget))
+
+    budget_frame = _chart_dataframe(pd, ranking_rows, _BUDGET_COLUMN)
+    table_frame = _display_dataframe(pd, filtered_rows)
+    audit_frame = pd.DataFrame(data.excluded_project_rows)
+
+    tab_overview, tab_table, tab_audit = st.tabs(["Visao geral", "Tabela", "Auditoria"])
+    with tab_overview:
+        left, right = st.columns(2)
+        with left:
+            st.subheader("Orcamento contratado")
+            _bar_chart_with_total_labels(
+                st,
+                alt,
+                budget_frame,
+                x="instituicao_sigla",
+                y=_BUDGET_COLUMN,
+                color="#28666E",
+                show_values=show_chart_values,
+            )
+
+        with right:
+            st.subheader("Bolsas concedidas")
+            scholarship_rows = top_rows(filtered_rows, _SCHOLARSHIPS_COLUMN, top_n)
+            _bar_chart_with_total_labels(
+                st,
+                alt,
+                _chart_dataframe(pd, scholarship_rows, _SCHOLARSHIPS_COLUMN),
+                x="instituicao_sigla",
+                y=_SCHOLARSHIPS_COLUMN,
+                color="#7C9885",
+                show_values=show_chart_values,
+            )
+
+        st.subheader("Detalhamento do orcamento contratado")
+        _bar_chart_with_total_labels(
+            st,
+            alt,
+            _chart_dataframe(pd, budget_category_rows, _BUDGET_VALUE_COLUMN),
+            x=_BUDGET_CATEGORY_COLUMN,
+            y=_BUDGET_VALUE_COLUMN,
+            color="#6A4C93",
+            show_values=show_chart_values,
+        )
+
+        st.subheader("Bolsas concedidas financeiro")
+        scholarship_amount_rows = top_rows(
+            filtered_rows,
+            _SCHOLARSHIP_AMOUNT_COLUMN,
+            top_n,
+        )
+        _bar_chart_with_total_labels(
+            st,
+            alt,
+            _chart_dataframe(pd, scholarship_amount_rows, _SCHOLARSHIP_AMOUNT_COLUMN),
+            x="instituicao_sigla",
+            y=_SCHOLARSHIP_AMOUNT_COLUMN,
+            color="#8B5E34",
+            show_values=show_chart_values,
+        )
+
+        st.subheader("Projetos por instituicao")
+        project_rows = top_rows(filtered_rows, _PROJECTS_COLUMN, top_n)
+        _bar_chart_with_total_labels(
+            st,
+            alt,
+            _chart_dataframe(pd, project_rows, _PROJECTS_COLUMN),
+            x="instituicao_sigla",
+            y=_PROJECTS_COLUMN,
+            color="#F2A541",
+            show_values=show_chart_values,
+        )
+
+    with tab_table:
+        st.dataframe(table_frame, use_container_width=True, hide_index=True)
+        csv_payload = table_frame.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Baixar CSV",
+            data=csv_payload,
+            file_name="relatorio_instituicoes.csv",
+            mime="text/csv",
+        )
+
+    with tab_audit:
+        if audit_frame.empty:
+            st.info("Nenhum projeto encontrado pela regra de exclusao.")
+        else:
+            st.dataframe(audit_frame, use_container_width=True, hide_index=True)
+            audit_csv_payload = audit_frame.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Baixar projetos excluidos",
+                data=audit_csv_payload,
+                file_name="projetos_excluidos_auditoria.csv",
+                mime="text/csv",
+            )
+
+
+def _render_institution_detail_page(
+    st: Any,
+    pd: Any,
+    alt: Any,
+    input_dir: Path,
+    institution_rows: Sequence[Mapping[str, object]],
+    *,
+    include_excluded_projects: bool,
+    show_chart_values: bool,
+) -> None:
+    with st.sidebar:
+        include_unknown_institutions = bool(
+            st.toggle(
+                "Incluir Sem informacao",
+                value=False,
+                key="detail_include_unknown_institutions",
+            )
+        )
+        institution_selection_rows = _available_institution_rows(
+            institution_rows,
+            include_unknown_institutions,
+            "",
+        )
+        options = institution_options(institution_selection_rows)
+        if not options:
+            st.warning("Nenhuma instituicao encontrada para os filtros selecionados.")
+            return
+        institution_label = st.selectbox(
+            "Instituicao e sigla",
+            options=options,
+        )
+
+    project_rows = load_project_details(
+        input_dir,
+        str(institution_label),
+        include_excluded_projects=include_excluded_projects,
+    )
+
+    st.header(str(institution_label))
+    if not project_rows:
+        st.warning("Nenhum projeto encontrado para a instituicao selecionada.")
+        return
+
+    with st.sidebar:
+        st.header("Filtros dos projetos")
+        project_query = st.text_input("Buscar projeto ou responsavel")
+        selected_statuses = st.multiselect(
+            "Situacao",
+            options=_project_status_options(project_rows),
+        )
+        selected_years = st.multiselect(
+            "Ano",
+            options=_project_year_options(project_rows),
+        )
+        show_only_active_projects = bool(
+            st.toggle(
+                "Mostrar apenas projetos ativos",
+                value=False,
+                key="show_only_active_projects",
+            )
+        )
+
+    filtered_project_rows = _filter_project_rows(
+        project_rows,
+        query=project_query,
+        selected_statuses=selected_statuses,
+        selected_years=selected_years,
+        only_active=show_only_active_projects,
+    )
+    timeline_rows = build_project_timeline(filtered_project_rows)
+
+    total_budget = sum(
+        (_decimal(row.get(_BUDGET_COLUMN)) for row in filtered_project_rows),
+        Decimal("0"),
+    )
+    total_scholarship_amount = sum(
+        (
+            _decimal(row.get(_SCHOLARSHIP_AMOUNT_COLUMN))
+            for row in filtered_project_rows
+        ),
+        Decimal("0"),
+    )
+    metric_columns = st.columns(5)
+    metric_columns[0].metric("Projetos", len(filtered_project_rows))
+    metric_columns[1].metric(
+        "Anos",
+        len({row["ano"] for row in timeline_rows}),
+    )
+    metric_columns[2].metric(
+        "Bolsas",
+        sum(_int_value(row.get(_SCHOLARSHIPS_COLUMN)) for row in filtered_project_rows),
+    )
+    metric_columns[3].metric("Valor bolsas", _currency_label(total_scholarship_amount))
+    metric_columns[4].metric("Orcamento", _currency_label(total_budget))
+
+    if not filtered_project_rows:
+        st.warning("Nenhum projeto encontrado para os filtros selecionados.")
+
+    timeline_frame = pd.DataFrame(timeline_rows)
+    budget_category_rows = load_budget_categories(
+        input_dir,
+        [str(institution_label)],
+        include_excluded_projects=include_excluded_projects,
+    )
+    scholarship_detail_rows = load_scholarship_details(
+        input_dir,
+        [str(institution_label)],
+        include_excluded_projects=include_excluded_projects,
+    )
+
+    (
+        tab_budgets,
+        tab_scholarships,
+        tab_budget_details,
+        tab_scholarship_details,
+        tab_projects,
+    ) = st.tabs(_institution_detail_tabs())
+    with tab_budgets:
+        if timeline_frame.empty:
+            st.warning("Os projetos selecionados nao possuem data para agrupamento.")
+        else:
+            st.subheader("Orcamento por ano")
+            _bar_chart_with_total_labels(
+                st,
+                alt,
+                _chart_dataframe(pd, timeline_rows, _BUDGET_VALUE_COLUMN),
+                x="ano",
+                y=_BUDGET_VALUE_COLUMN,
+                color="#F2A541",
+                show_values=show_chart_values,
+            )
+
+            st.dataframe(
+                timeline_frame[["ano", _BUDGET_COLUMN, _BUDGET_VALUE_COLUMN]].drop(
+                    columns=[_BUDGET_VALUE_COLUMN]
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    with tab_scholarships:
+        if timeline_frame.empty:
+            st.warning("Os projetos selecionados nao possuem data para agrupamento.")
+        else:
+            left, right = st.columns(2)
+            with left:
+                st.subheader("Bolsas por ano")
+                _bar_chart_with_total_labels(
+                    st,
+                    alt,
+                    _chart_dataframe(pd, timeline_rows, _SCHOLARSHIPS_COLUMN),
+                    x="ano",
+                    y=_SCHOLARSHIPS_COLUMN,
+                    color="#7C9885",
+                    show_values=show_chart_values,
+                )
+            with right:
+                st.subheader("Bolsas concedidas financeiro por ano")
+                _bar_chart_with_total_labels(
+                    st,
+                    alt,
+                    _chart_dataframe(
+                        pd,
+                        timeline_rows,
+                        _SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
+                    ),
+                    x="ano",
+                    y=_SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
+                    color="#8B5E34",
+                    show_values=show_chart_values,
+                )
+
+            st.dataframe(
+                timeline_frame[
+                    [
+                        "ano",
+                        _SCHOLARSHIPS_COLUMN,
+                        _SCHOLARSHIP_AMOUNT_COLUMN,
+                        _SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
+                    ]
+                ].drop(columns=[_SCHOLARSHIP_AMOUNT_VALUE_COLUMN]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    with tab_budget_details:
+        st.subheader("Detalhe de orcamentos")
+        _bar_chart_with_total_labels(
+            st,
+            alt,
+            _chart_dataframe(pd, budget_category_rows, _BUDGET_VALUE_COLUMN),
+            x=_BUDGET_CATEGORY_COLUMN,
+            y=_BUDGET_VALUE_COLUMN,
+            color="#6A4C93",
+            show_values=show_chart_values,
+        )
+        st.dataframe(
+            _drop_existing_columns(
+                pd.DataFrame(budget_category_rows),
+                [_BUDGET_VALUE_COLUMN],
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    with tab_scholarship_details:
+        st.subheader("Detalhe de bolsas")
+        if scholarship_detail_rows:
+            left, right = st.columns(2)
+            with left:
+                st.subheader("Quantidade por tipo")
+                _bar_chart_with_total_labels(
+                    st,
+                    alt,
+                    _chart_dataframe(
+                        pd,
+                        scholarship_detail_rows,
+                        _SCHOLARSHIPS_COLUMN,
+                    ),
+                    x=_SCHOLARSHIP_TYPE_COLUMN,
+                    y=_SCHOLARSHIPS_COLUMN,
+                    color="#7C9885",
+                    show_values=show_chart_values,
+                )
+            with right:
+                st.subheader("Valor por tipo")
+                _bar_chart_with_total_labels(
+                    st,
+                    alt,
+                    _chart_dataframe(
+                        pd,
+                        scholarship_detail_rows,
+                        _SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
+                    ),
+                    x=_SCHOLARSHIP_TYPE_COLUMN,
+                    y=_SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
+                    color="#8B5E34",
+                    show_values=show_chart_values,
+                )
+        else:
+            st.info("Nenhuma bolsa encontrada para a instituicao selecionada.")
+
+        scholarship_details_frame = pd.DataFrame(scholarship_detail_rows)
+        if not scholarship_details_frame.empty:
+            st.subheader("Tipos de bolsas contratadas")
+            st.dataframe(
+                pd.DataFrame(_scholarship_detail_table_rows(scholarship_detail_rows)),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    with tab_projects:
+        st.caption(_excluded_project_status_note())
+        responsible_volume_frame = pd.DataFrame(
+            _responsible_financial_volume_rows(filtered_project_rows)
+        )
+        if not responsible_volume_frame.empty:
+            st.subheader("Volume financeiro por responsavel")
+            st.dataframe(
+                responsible_volume_frame,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        st.subheader("Projetos")
+        project_detail_frame = pd.DataFrame(
+            _project_detail_table_rows(filtered_project_rows)
+        )
+        st.dataframe(project_detail_frame, use_container_width=True, hide_index=True)
+        csv_payload = project_detail_frame.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Baixar projetos",
+            data=csv_payload,
+            file_name="projetos_instituicao.csv",
+            mime="text/csv",
+        )
+
+
+def _render_researcher_page(
+    st: Any,
+    pd: Any,
+    alt: Any,
+    input_dir: Path,
+    *,
+    include_excluded_projects: bool,
+    show_chart_values: bool,
+) -> None:
+    with st.sidebar:
+        st.header("Filtro do pesquisador")
+        researcher_query = st.text_input("Nome do pesquisador")
+
+    st.header("Projetos por pesquisador")
+    if not researcher_query.strip():
+        st.info("Digite parte do nome do pesquisador para carregar os projetos.")
+        return
+
+    project_rows = load_researcher_project_details(
+        input_dir,
+        researcher_query,
+        include_excluded_projects=include_excluded_projects,
+    )
+    if not project_rows:
+        st.warning("Nenhum projeto encontrado para o pesquisador informado.")
+        return
+
+    with st.sidebar:
+        selected_statuses = st.multiselect(
+            "Status do projeto",
+            options=_project_status_options(project_rows),
+            key="researcher_project_statuses",
+        )
+
+    filtered_project_rows = _filter_researcher_project_rows(
+        project_rows,
+        selected_statuses=selected_statuses,
+    )
+    if not filtered_project_rows:
+        st.warning("Nenhum projeto encontrado para os status selecionados.")
+        return
+
+    timeline_rows = build_project_timeline(filtered_project_rows)
+    total_budget = sum(
+        (_decimal(row.get(_BUDGET_COLUMN)) for row in filtered_project_rows),
+        Decimal("0"),
+    )
+    total_scholarship_amount = sum(
+        (
+            _decimal(row.get(_SCHOLARSHIP_AMOUNT_COLUMN))
+            for row in filtered_project_rows
+        ),
+        Decimal("0"),
+    )
+
+    metric_columns = st.columns(5)
+    metric_columns[0].metric("Projetos", len(filtered_project_rows))
+    metric_columns[1].metric(
+        "Instituicoes", len(_researcher_institutions(filtered_project_rows))
+    )
+    metric_columns[2].metric(
+        "Bolsas",
+        sum(_int_value(row.get(_SCHOLARSHIPS_COLUMN)) for row in filtered_project_rows),
+    )
+    metric_columns[3].metric("Valor bolsas", _currency_label(total_scholarship_amount))
+    metric_columns[4].metric("Orcamento", _currency_label(total_budget))
+
+    researcher_name_frame = pd.DataFrame(_researcher_name_rows(filtered_project_rows))
+    if not researcher_name_frame.empty:
+        st.subheader("Pesquisadores encontrados")
+        st.dataframe(researcher_name_frame, use_container_width=True, hide_index=True)
+
+    timeline_frame = pd.DataFrame(timeline_rows)
+    if not timeline_frame.empty:
+        financial_timeline_frame = pd.DataFrame(
+            _researcher_financial_timeline_rows(timeline_rows)
+        )
+        left, right = st.columns(2)
+        with left:
+            st.subheader("Projetos por ano")
+            _bar_chart_with_total_labels(
+                st,
+                alt,
+                _chart_dataframe(pd, timeline_rows, _PROJECTS_COLUMN),
+                x="ano",
+                y=_PROJECTS_COLUMN,
+                color="#28666E",
+                show_values=show_chart_values,
+            )
+        with right:
+            st.subheader("Volume financeiro por ano")
+            _grouped_bar_chart_with_total_labels(
+                st,
+                alt,
+                financial_timeline_frame,
+                x="ano",
+                y=_FINANCIAL_VOLUME_VALUE_COLUMN,
+                color=_FINANCIAL_VOLUME_TYPE_COLUMN,
+                color_domain=("Orcamento contratado", "Valor bolsas"),
+                color_range=("#F2A541", "#8B5E34"),
+                show_values=show_chart_values,
+            )
+
+    st.subheader("Projetos")
+    project_frame = pd.DataFrame(_researcher_project_table_rows(filtered_project_rows))
+    st.dataframe(project_frame, use_container_width=True, hide_index=True)
+    csv_payload = project_frame.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "Baixar projetos do pesquisador",
+        data=csv_payload,
+        file_name="projetos_pesquisador.csv",
+        mime="text/csv",
+    )
+
+
+def _institution_detail_tabs() -> list[str]:
+    return [
+        "Orcamentos",
+        "Bolsas",
+        "Detalhe de orcamentos",
+        "Detalhe de bolsas",
+        "Projetos",
+    ]
+
+
+def _drop_existing_columns(dataframe: Any, columns: Sequence[str]) -> Any:
+    existing_columns = [column for column in columns if column in dataframe]
+    if not existing_columns:
+        return dataframe
+
+    return dataframe.drop(columns=existing_columns)
+
+
+def _available_institution_rows(
+    rows: Sequence[Mapping[str, object]],
+    include_unknown: bool,
+    query: str,
+) -> list[ReportRow]:
+    available_rows = (
+        [dict(row) for row in rows]
+        if include_unknown
+        else _known_institution_rows(rows)
+    )
+    return filter_rows(available_rows, query)
+
+
+def _known_institution_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [dict(row) for row in rows if not _is_unknown_institution(row)]
+
+
+def _is_unknown_institution(row: Mapping[str, object]) -> bool:
+    return (
+        str(row.get("instituicao_nome", "")).strip() == _UNKNOWN_INSTITUTION
+        and str(row.get("instituicao_sigla", "")).strip() == _UNKNOWN_INSTITUTION
+    )
+
+
+def _detail_filter_labels(
+    filtered_rows: Sequence[Mapping[str, object]],
+    selected_options: Sequence[str],
+    include_unknown: bool,
+    query_applied: bool,
+) -> list[str]:
+    if selected_options:
+        return list(selected_options)
+    if include_unknown and not query_applied:
+        return []
+    labels = institution_options(filtered_rows)
+    return labels if labels else [_NO_MATCH_INSTITUTION_LABEL]
+
+
+def _project_detail_table_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [
+        {
+            "Projeto ID": row.get("projeto_id", ""),
+            "Projeto": row.get("projeto_titulo", ""),
+            "Responsavel": row.get("coordenador_nome", ""),
+            "Inicio previsto": row.get("projeto_data_inicio_previsto", ""),
+            "Conclusao prevista": row.get("projeto_data_fim_previsto", ""),
+            "Situacao": row.get("situacao_descricao", ""),
+            "Bolsas": _int_value(row.get(_SCHOLARSHIPS_COLUMN)),
+            "Valor bolsas": _currency_label(row.get(_SCHOLARSHIP_AMOUNT_COLUMN)),
+            "Orcamento contratado": _currency_label(row.get(_BUDGET_COLUMN)),
+        }
+        for row in rows
+    ]
+
+
+def _researcher_project_table_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    table_rows: list[ReportRow] = []
+    for row in rows:
+        table_row = _project_detail_table_rows([row])[0]
+        table_row = {
+            "Projeto ID": table_row["Projeto ID"],
+            "Projeto": table_row["Projeto"],
+            "Responsavel": table_row["Responsavel"],
+            "Instituicao": row.get("instituicao_nome", ""),
+            "Sigla": row.get("instituicao_sigla", ""),
+            "Inicio previsto": table_row["Inicio previsto"],
+            "Conclusao prevista": table_row["Conclusao prevista"],
+            "Situacao": table_row["Situacao"],
+            "Bolsas": table_row["Bolsas"],
+            "Valor bolsas": table_row["Valor bolsas"],
+            "Orcamento contratado": table_row["Orcamento contratado"],
+        }
+        table_rows.append(table_row)
+
+    return table_rows
+
+
+def _researcher_institutions(rows: Sequence[Mapping[str, object]]) -> set[str]:
+    return {
+        str(row.get("instituicao") or row.get("instituicao_nome") or "").strip()
+        for row in rows
+        if str(row.get("instituicao") or row.get("instituicao_nome") or "").strip()
+    }
+
+
+def _researcher_name_rows(rows: Sequence[Mapping[str, object]]) -> list[ReportRow]:
+    totals: dict[str, dict[str, object]] = {}
+    for row in rows:
+        researcher = str(row.get("coordenador_nome") or _UNKNOWN_INSTITUTION).strip()
+        if not researcher:
+            researcher = _UNKNOWN_INSTITUTION
+        if researcher not in totals:
+            totals[researcher] = {
+                "pesquisador": researcher,
+                "projetos": 0,
+                "instituicoes": set(),
+            }
+
+        total = totals[researcher]
+        total["projetos"] = _int_value(total["projetos"]) + 1
+        institution = str(
+            row.get("instituicao") or row.get("instituicao_nome") or ""
+        ).strip()
+        if institution:
+            cast(set[str], total["instituicoes"]).add(institution)
+
+    ordered_totals = sorted(
+        totals.values(),
+        key=lambda total: (
+            -_int_value(total["projetos"]),
+            str(total["pesquisador"]).casefold(),
+        ),
+    )
+    return [
+        {
+            "Pesquisador": total["pesquisador"],
+            "Projetos": _int_value(total["projetos"]),
+            "Instituicoes": len(cast(set[str], total["instituicoes"])),
+        }
+        for total in ordered_totals
+    ]
+
+
+def _filter_researcher_project_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_statuses: Sequence[str],
+) -> list[ReportRow]:
+    if not selected_statuses:
+        return [dict(row) for row in rows]
+
+    statuses = set(selected_statuses)
+    return [
+        dict(row) for row in rows if str(row.get("situacao_descricao", "")) in statuses
+    ]
+
+
+def _responsible_financial_volume_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    totals: dict[str, dict[str, object]] = {}
+    for row in rows:
+        if _is_not_contracted_project_status(row.get("situacao_descricao")):
+            continue
+        responsible = str(row.get("coordenador_nome") or _UNKNOWN_INSTITUTION).strip()
+        if not responsible:
+            responsible = _UNKNOWN_INSTITUTION
+        if responsible not in totals:
+            totals[responsible] = {
+                "responsavel": responsible,
+                "projetos": 0,
+                "bolsas": 0,
+                "valor_bolsas": Decimal("0"),
+                "volume_financeiro": Decimal("0"),
+            }
+
+        total = totals[responsible]
+        total["projetos"] = _int_value(total["projetos"]) + 1
+        total["bolsas"] = _int_value(total["bolsas"]) + _int_value(
+            row.get(_SCHOLARSHIPS_COLUMN)
+        )
+        total["valor_bolsas"] = _decimal(total["valor_bolsas"]) + _decimal(
+            row.get(_SCHOLARSHIP_AMOUNT_COLUMN)
+        )
+        total["volume_financeiro"] = _decimal(total["volume_financeiro"]) + _decimal(
+            row.get(_BUDGET_COLUMN)
+        )
+
+    ordered_totals = sorted(
+        totals.values(),
+        key=lambda total: (
+            -_decimal(total["volume_financeiro"]),
+            str(total["responsavel"]).casefold(),
+        ),
+    )
+    return [
+        {
+            "Responsavel": total["responsavel"],
+            "Projetos": _int_value(total["projetos"]),
+            "Bolsas": _int_value(total["bolsas"]),
+            "Valor bolsas": _currency_label(total["valor_bolsas"]),
+            "Volume financeiro": _currency_label(total["volume_financeiro"]),
+        }
+        for total in ordered_totals
+    ]
+
+
+def _is_not_contracted_project_status(value: object) -> bool:
+    return _report_is_not_contracted_status(value)
+
+
+def _excluded_project_status_note() -> str:
+    labels = "; ".join(excluded_project_status_labels())
+    return (
+        "Projetos com situacao "
+        f"{labels} foram excluidos das contas, graficos e do volume financeiro."
+    )
+
+
+def _scholarship_detail_table_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [
+        {
+            "Tipo de bolsa": row.get(_SCHOLARSHIP_TYPE_COLUMN, ""),
+            "Nome da bolsa": row.get("nome_bolsa", ""),
+            "Quantidade": _int_value(row.get(_SCHOLARSHIPS_COLUMN)),
+            "Valor contratado": _currency_label(row.get(_SCHOLARSHIP_AMOUNT_COLUMN)),
+            "Lancamentos": _int_value(row.get("total_lancamentos")),
+        }
+        for row in rows
+    ]
+
+
+def _active_project_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [
+        dict(row)
+        for row in rows
+        if _is_active_project_status(row.get("situacao_descricao"))
+    ]
+
+
+def _is_active_project_status(value: object) -> bool:
+    return "em andamento" in str(value or "").casefold()
+
+
+def _filter_project_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    query: str,
+    selected_statuses: Sequence[str],
+    selected_years: Sequence[int],
+    only_active: bool,
+) -> list[ReportRow]:
+    statuses = set(selected_statuses)
+    years = set(selected_years)
+    filtered_rows: list[ReportRow] = []
+    for row in rows:
+        if only_active and not _is_active_project_status(row.get("situacao_descricao")):
+            continue
+        if statuses and str(row.get("situacao_descricao", "")) not in statuses:
+            continue
+        if years and row.get("ano") not in years:
+            continue
+        if query and not _project_matches_query(row, query):
+            continue
+        filtered_rows.append(dict(row))
+
+    return filtered_rows
+
+
+def _project_matches_query(row: Mapping[str, object], query: str) -> bool:
+    normalized_query = query.casefold().strip()
+    if not normalized_query:
+        return True
+
+    searchable_values = (
+        row.get("projeto_id"),
+        row.get("projeto_titulo"),
+        row.get("coordenador_nome"),
+        row.get("situacao_descricao"),
+    )
+    return any(
+        normalized_query in str(value or "").casefold() for value in searchable_values
+    )
+
+
+def _project_year_options(rows: Sequence[Mapping[str, object]]) -> list[int]:
+    years = set()
+    for row in rows:
+        year = row.get("ano")
+        if isinstance(year, int):
+            years.add(year)
+
+    return sorted(years)
+
+
+def _project_status_options(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    statuses = {str(row.get("situacao_descricao", "")).strip() for row in rows}
+    return sorted((status for status in statuses if status), key=str.casefold)
+
+
+def _bar_chart_with_total_labels(
+    st: Any,
+    alt: Any,
+    dataframe: Any,
+    *,
+    x: str,
+    y: str,
+    color: str,
+    show_values: bool = True,
+) -> None:
+    if dataframe.empty:
+        st.info("Sem dados para o grafico.")
+        return
+
+    x_type = "O" if x == "ano" else "N"
+    label_angle = 0 if x == "ano" else -35
+    base = alt.Chart(dataframe).encode(
+        x=alt.X(
+            f"{x}:{x_type}",
+            sort=None,
+            axis=alt.Axis(labelAngle=label_angle, labelLimit=160),
+        ),
+        y=alt.Y(
+            f"{y}:Q",
+            scale=_chart_y_scale(alt, dataframe, y),
+            title=None,
+        ),
+        tooltip=[
+            alt.Tooltip(f"{column}:N", title=title)
+            for column, title in _chart_tooltip_fields(dataframe.columns, x)
+        ],
+    )
+    bars = base.mark_bar(color=color)
+    labels = base.mark_text(
+        align="center",
+        baseline="bottom",
+        dy=-5,
+        fontSize=12,
+    ).encode(text=alt.Text(f"{_CHART_LABEL_COLUMN}:N"))
+
+    chart = bars + labels if show_values else bars
+
+    st.altair_chart(chart.properties(height=360), use_container_width=True)
+
+
+def _grouped_bar_chart_with_total_labels(
+    st: Any,
+    alt: Any,
+    dataframe: Any,
+    *,
+    x: str,
+    y: str,
+    color: str,
+    color_domain: Sequence[str],
+    color_range: Sequence[str],
+    show_values: bool = True,
+) -> None:
+    if dataframe.empty:
+        st.info("Sem dados para o grafico.")
+        return
+
+    base = alt.Chart(dataframe).encode(
+        x=alt.X(
+            f"{x}:O",
+            sort=None,
+            axis=alt.Axis(labelAngle=0, labelLimit=160),
+        ),
+        xOffset=alt.XOffset(f"{color}:N", title=None),
+        y=alt.Y(
+            f"{y}:Q",
+            scale=_chart_y_scale(alt, dataframe, y),
+            title=None,
+        ),
+        color=alt.Color(
+            f"{color}:N",
+            scale=alt.Scale(domain=list(color_domain), range=list(color_range)),
+            title=None,
+        ),
+        tooltip=[
+            alt.Tooltip(f"{x}:O", title=x),
+            alt.Tooltip(f"{color}:N", title="Tipo"),
+            alt.Tooltip(f"{_CHART_LABEL_COLUMN}:N", title="Total"),
+        ],
+    )
+    bars = base.mark_bar()
+    labels = base.mark_text(
+        align="center",
+        baseline="bottom",
+        dy=-5,
+        fontSize=12,
+    ).encode(text=alt.Text(f"{_CHART_LABEL_COLUMN}:N"))
+
+    chart = bars + labels if show_values else bars
+
+    st.altair_chart(chart.properties(height=360), use_container_width=True)
+
+
+def _chart_tooltip_fields(
+    columns: Sequence[str],
+    x_column: str,
+) -> list[tuple[str, str]]:
+    existing_columns = set(columns)
+    tooltip_fields = [(x_column, x_column)]
+
+    for column_options, title in _TOOLTIP_FIELD_GROUPS:
+        for column in column_options:
+            if column in existing_columns and column != x_column:
+                tooltip_fields.append((column, title))
+                break
+
+    return tooltip_fields
+
+
+def _chart_y_scale(alt: Any, dataframe: Any, y: str) -> Any:
+    max_value = _max_chart_value(dataframe, y)
+    if max_value <= 0:
+        return alt.Scale(zero=True)
+
+    return alt.Scale(domain=[0, max_value * 1.15])
+
+
+def _max_chart_value(dataframe: Any, y: str) -> float:
+    try:
+        values = [float(value) for value in dataframe[y].dropna()]
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return 0.0
+
+    return max(values, default=0.0)
+
+
+def _chart_dataframe(
+    pd_module: Any,
+    rows: Sequence[Mapping[str, object]],
+    y_column: str,
+) -> Any:
+    return pd_module.DataFrame(_chart_rows_with_labels(rows, y_column))
+
+
+def _chart_rows_with_labels(
+    rows: Sequence[Mapping[str, object]],
+    y_column: str,
+) -> list[ReportRow]:
+    chart_rows: list[ReportRow] = []
+    for row in rows:
+        chart_row = dict(row)
+        _add_money_tooltip_value(
+            chart_row,
+            row,
+            _BUDGET_TOOLTIP_COLUMN,
+            (_BUDGET_COLUMN, _BUDGET_VALUE_COLUMN),
+        )
+        _add_money_tooltip_value(
+            chart_row,
+            row,
+            _SCHOLARSHIP_AMOUNT_TOOLTIP_COLUMN,
+            (_SCHOLARSHIP_AMOUNT_COLUMN, _SCHOLARSHIP_AMOUNT_VALUE_COLUMN),
+        )
+        chart_row[y_column] = _chart_numeric_value(row, y_column)
+        chart_row[_CHART_LABEL_COLUMN] = _chart_total_label(row, y_column)
+        chart_rows.append(chart_row)
+
+    return chart_rows
+
+
+def _researcher_financial_timeline_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    financial_rows: list[ReportRow] = []
+    for row in rows:
+        financial_rows.extend(
+            [
+                _researcher_financial_timeline_row(
+                    row,
+                    volume_type="Orcamento contratado",
+                    value_column=_BUDGET_VALUE_COLUMN,
+                    label_column=_BUDGET_COLUMN,
+                ),
+                _researcher_financial_timeline_row(
+                    row,
+                    volume_type="Valor bolsas",
+                    value_column=_SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
+                    label_column=_SCHOLARSHIP_AMOUNT_COLUMN,
+                ),
+            ]
+        )
+
+    return financial_rows
+
+
+def _researcher_financial_timeline_row(
+    row: Mapping[str, object],
+    *,
+    volume_type: str,
+    value_column: str,
+    label_column: str,
+) -> ReportRow:
+    return {
+        "ano": row.get("ano", ""),
+        _FINANCIAL_VOLUME_TYPE_COLUMN: volume_type,
+        _FINANCIAL_VOLUME_VALUE_COLUMN: _chart_numeric_value(row, value_column),
+        _CHART_LABEL_COLUMN: _short_currency_label(
+            row.get(label_column, row.get(value_column))
+        ),
+    }
+
+
+def _add_money_tooltip_value(
+    target_row: ReportRow,
+    source_row: Mapping[str, object],
+    tooltip_column: str,
+    source_columns: Sequence[str],
+) -> None:
+    for column in source_columns:
+        if column in source_row:
+            target_row[tooltip_column] = _currency_label(source_row.get(column))
+            return
+
+
+def _chart_numeric_value(row: Mapping[str, object], y_column: str) -> int | float:
+    if y_column in _FINANCIAL_CHART_COLUMNS:
+        return float(_decimal(row.get(y_column)))
+
+    return _int_value(row.get(y_column))
+
+
+def _chart_total_label(row: Mapping[str, object], y_column: str) -> str:
+    if y_column == _BUDGET_VALUE_COLUMN:
+        return _short_currency_label(row.get(_BUDGET_COLUMN, row.get(y_column)))
+    if y_column == _SCHOLARSHIP_AMOUNT_VALUE_COLUMN:
+        return _short_currency_label(
+            row.get(_SCHOLARSHIP_AMOUNT_COLUMN, row.get(y_column))
+        )
+    if y_column in {_BUDGET_COLUMN, _SCHOLARSHIP_AMOUNT_COLUMN}:
+        return _short_currency_label(row.get(y_column))
+
+    return _number_label(_int_value(row.get(y_column)))
+
+
+_FINANCIAL_CHART_COLUMNS: Final = frozenset(
+    {
+        _BUDGET_COLUMN,
+        _BUDGET_VALUE_COLUMN,
+        _SCHOLARSHIP_AMOUNT_COLUMN,
+        _SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
+    }
+)
+
+
+def _display_dataframe(pd_module: Any, rows: Sequence[Mapping[str, object]]) -> Any:
+    return pd_module.DataFrame(_display_rows(rows))
+
+
+def _summary_totals(rows: Sequence[Mapping[str, object]]) -> DashboardTotals:
+    total_scholarship_amount = sum(
+        (_decimal(row.get(_SCHOLARSHIP_AMOUNT_COLUMN)) for row in rows),
+        Decimal("0"),
+    )
+    total_budget = sum(
+        (_decimal(row.get(_BUDGET_COLUMN)) for row in rows),
+        Decimal("0"),
+    )
+
+    return DashboardTotals(
+        total_institutions=len(rows),
+        total_projects=sum(_int_value(row.get(_PROJECTS_COLUMN)) for row in rows),
+        total_scholarships=sum(
+            _int_value(row.get(_SCHOLARSHIPS_COLUMN)) for row in rows
+        ),
+        total_scholarship_amount=_money(total_scholarship_amount),
+        total_budget=_money(total_budget),
+    )
+
+
+def _display_rows(rows: Sequence[Mapping[str, object]]) -> list[ReportRow]:
+    display_rows: list[ReportRow] = []
+    for row in rows:
+        display_row = dict(row)
+        display_row[_SCHOLARSHIP_AMOUNT_COLUMN] = _money(
+            _decimal(row.get(_SCHOLARSHIP_AMOUNT_COLUMN))
+        )
+        display_row[_BUDGET_COLUMN] = _money(_decimal(row.get(_BUDGET_COLUMN)))
+        display_rows.append(display_row)
+
+    return display_rows
+
+
+def _institution_label(row: Mapping[str, object]) -> str:
+    name = str(row.get("instituicao_nome", "")).strip()
+    acronym = str(row.get("instituicao_sigla", "")).strip()
+    if name and acronym:
+        return f"{name} | {acronym}"
+    if name:
+        return name
+    return acronym
+
+
+def _metric_from_label(label: str) -> str:
+    if label == "Quantidade de bolsas":
+        return _SCHOLARSHIPS_COLUMN
+    if label == "Bolsas concedidas financeiro":
+        return _SCHOLARSHIP_AMOUNT_COLUMN
+    if label == "Total de projetos":
+        return _PROJECTS_COLUMN
+    return _BUDGET_COLUMN
+
+
+def _currency_label(value: object) -> str:
+    return f"R$ {_money(_decimal(value))}"
+
+
+def _short_currency_label(value: object) -> str:
+    amount = _decimal(value)
+    absolute_amount = abs(amount)
+    units = (
+        (Decimal("1000000000"), "bi"),
+        (Decimal("1000000"), "mi"),
+        (Decimal("1000"), "mil"),
+    )
+
+    for divisor, suffix in units:
+        if absolute_amount >= divisor:
+            return f"R$ {_short_decimal(amount / divisor)} {suffix}"
+
+    return _currency_label(amount)
+
+
+def _short_decimal(value: Decimal) -> str:
+    formatted = f"{value.quantize(Decimal('0.1'))}"
+    return formatted.replace(".", ",").removesuffix(",0")
+
+
+def _number_label(value: int) -> str:
+    return f"{value:,}".replace(",", ".")
+
+
+def _decimal(value: object) -> Decimal:
+    if value is None:
+        return Decimal("0")
+
+    raw_value = str(value).strip()
+    if not raw_value:
+        return Decimal("0")
+
+    normalized = raw_value.replace("R$", "").replace(" ", "")
+    if "," in normalized and "." in normalized:
+        normalized = normalized.replace(".", "").replace(",", ".")
+    elif "," in normalized:
+        normalized = normalized.replace(",", ".")
+
+    try:
+        return Decimal(normalized)
+    except InvalidOperation:
+        return Decimal("0")
+
+
+def _int_value(value: object) -> int:
+    return int(_decimal(value))
+
+
+def _money(value: Decimal) -> str:
+    formatted = f"{value.quantize(Decimal('0.01')):,.2f}"
+    return formatted.replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+if __name__ == "__main__":
+    run_app()
