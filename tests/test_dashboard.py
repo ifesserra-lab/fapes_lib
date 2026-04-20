@@ -435,6 +435,32 @@ def test_dashboard_filters_and_summarizes_scholarship_allocations(
     ]
 
 
+def test_dashboard_ranks_scholarship_allocation_chart_by_allocated_value(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    rows = [
+        {
+            "bolsista": "Bolsista menor",
+            "valor_alocado_total": "1.000,00",
+            "valor_pago_total": "0,00",
+        },
+        {
+            "bolsista": "Bolsista maior",
+            "valor_alocado_total": "9.000,00",
+            "valor_pago_total": "0,00",
+        },
+    ]
+
+    ranked_rows = dashboard._top_scholarship_allocation_holder_rows(rows, 2)
+
+    assert [row["bolsista"] for row in ranked_rows] == [
+        "Bolsista maior",
+        "Bolsista menor",
+    ]
+
+
 def test_dashboard_filters_researcher_scholarships_for_analysis(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

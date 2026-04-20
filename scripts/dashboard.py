@@ -1140,21 +1140,20 @@ def _render_scholarship_allocations_page(
     tab_summary, tab_table = st.tabs(["Resumo", "Tabela"])
 
     with tab_summary:
-        st.subheader("Top bolsistas por valor pago")
+        st.subheader("Top bolsistas por valor alocado")
         _bar_chart_with_total_labels(
             st,
             alt,
             _chart_dataframe(
                 pd,
-                top_rows(
+                _top_scholarship_allocation_holder_rows(
                     summary_rows,
-                    _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
                     top_n,
                 ),
-                _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
+                _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN,
             ),
             x="bolsista",
-            y=_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
+            y=_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN,
             color="#28666E",
             show_values=show_chart_values,
         )
@@ -1630,6 +1629,13 @@ def _scholarship_allocation_summary_table_rows(
         }
         for row in rows
     ]
+
+
+def _top_scholarship_allocation_holder_rows(
+    rows: Sequence[Mapping[str, object]],
+    limit: int,
+) -> list[ReportRow]:
+    return top_rows(rows, _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN, limit)
 
 
 def _scholarship_allocation_matches_query(
