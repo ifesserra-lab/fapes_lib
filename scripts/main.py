@@ -111,8 +111,7 @@ def _parse_args(argv: Sequence[str] | None) -> MainArgs:
         type=Path,
         default=_DEFAULT_OUTPUT_DIR,
         help=(
-            "Diretorio de destino dos JSONs por edital. "
-            f"Padrao: {_DEFAULT_OUTPUT_DIR}"
+            f"Diretorio de destino dos JSONs por edital. Padrao: {_DEFAULT_OUTPUT_DIR}"
         ),
     )
     parser.add_argument(

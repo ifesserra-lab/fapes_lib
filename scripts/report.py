@@ -610,8 +610,7 @@ def run(
         print(f"Alocacao de bolsas JSON gerada: {scholarship_allocations_json_output}")
     if projects_by_location_output is not None:
         print(
-            "Projetos por instituicao e local gerados: "
-            f"{projects_by_location_output}"
+            f"Projetos por instituicao e local gerados: {projects_by_location_output}"
         )
     print(f"Instituicoes: {len(rows)}")
     print(f"Projetos: {total_projects}")
