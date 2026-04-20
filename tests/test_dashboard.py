@@ -1632,6 +1632,97 @@ def test_dashboard_flattens_institution_location_report_rows(
     ]
 
 
+def test_dashboard_filters_institution_location_detail_tables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    rows = [
+        {"Rubrica": "Material de consumo", "Valor": "R$ 1.000,00"},
+        {"Rubrica": "Serviços de terceiros", "Valor": "R$ 2.000,00"},
+    ]
+    holder_rows = [
+        {"Bolsista": "Ana Silva", "Tipo bolsa": "ICT | Iniciacao Cientifica"},
+        {"Bolsista": "Bruno Souza", "Tipo bolsa": "MSC | Mestrado"},
+    ]
+
+    assert dashboard._table_column_options(rows, "Rubrica") == [
+        "Material de consumo",
+        "Serviços de terceiros",
+    ]
+    assert dashboard._filter_table_rows_by_selected_values(
+        rows,
+        "Rubrica",
+        ["Serviços de terceiros"],
+    ) == [rows[1]]
+    assert dashboard._filter_institution_location_holder_table_rows(
+        holder_rows,
+        "ana",
+    ) == [holder_rows[0]]
+
+
+def test_dashboard_builds_institution_location_comparison_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    summary_rows = [
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES - SERRA",
+            "Local": "SERRA",
+            "Projetos": 2,
+            "Bolsas": 10,
+            "Valor bolsas": "R$ 1.000,00",
+            "Orcamento contratado": "R$ 5.000,00",
+        },
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES - VITÓRIA",
+            "Local": "VITÓRIA",
+            "Projetos": 1,
+            "Bolsas": 4,
+            "Valor bolsas": "R$ 500,00",
+            "Orcamento contratado": "R$ 2.000,00",
+        },
+        {
+            "Instituicao": "Universidade Federal do Espirito Santo",
+            "Sigla": "UFES - VITÓRIA",
+            "Local": "VITÓRIA",
+            "Projetos": 3,
+            "Bolsas": 6,
+            "Valor bolsas": "R$ 700,00",
+            "Orcamento contratado": "R$ 3.000,00",
+        },
+    ]
+
+    assert dashboard._institution_location_institution_options(summary_rows) == [
+        "Instituto Federal do Espirito Santo",
+        "Universidade Federal do Espirito Santo",
+    ]
+    assert dashboard._institution_location_comparison_rows(
+        summary_rows,
+        "Instituto Federal do Espirito Santo",
+    ) == [
+        {
+            "Local": "SERRA",
+            "Sigla": "IFES - SERRA",
+            "Projetos": 2,
+            "Bolsas": 10,
+            "Valor bolsas": "R$ 1.000,00",
+            "Orcamento contratado": "R$ 5.000,00",
+        },
+        {
+            "Local": "VITÓRIA",
+            "Sigla": "IFES - VITÓRIA",
+            "Projetos": 1,
+            "Bolsas": 4,
+            "Valor bolsas": "R$ 500,00",
+            "Orcamento contratado": "R$ 2.000,00",
+        },
+    ]
+
+
 class _FakeColumnConfig:
     @staticmethod
     def NumberColumn(label: str, *, format: str) -> dict[str, str]:

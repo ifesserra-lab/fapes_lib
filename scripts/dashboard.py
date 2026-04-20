@@ -1213,6 +1213,11 @@ def _render_institution_location_page(
             placeholder="Selecione uma ou mais instituicoes/locais",
         )
         location_query = st.text_input("Buscar instituicao, local ou projeto")
+        comparison_institution = st.selectbox(
+            "Comparar locais da instituicao",
+            options=[""] + _institution_location_institution_options(summary_rows),
+            format_func=lambda value: value if value else "Selecione uma instituicao",
+        )
 
     filtered_summary_rows = _filter_institution_location_table_rows(
         summary_rows,
@@ -1246,6 +1251,31 @@ def _render_institution_location_page(
         rows,
         selected_locations=selected_location_labels,
         query=location_query,
+    )
+    selected_rubrics = st.sidebar.multiselect(
+        "Rubrica",
+        options=_table_column_options(budget_rows, "Rubrica"),
+        key="institution_location_rubrics",
+    )
+    selected_scholarship_types = st.sidebar.multiselect(
+        "Tipo de bolsa",
+        options=_table_column_options(scholarship_rows, "Tipo bolsa"),
+        key="institution_location_scholarship_types",
+    )
+    holder_query = st.sidebar.text_input("Buscar bolsista")
+    budget_rows = _filter_table_rows_by_selected_values(
+        budget_rows,
+        "Rubrica",
+        selected_rubrics,
+    )
+    scholarship_rows = _filter_table_rows_by_selected_values(
+        scholarship_rows,
+        "Tipo bolsa",
+        selected_scholarship_types,
+    )
+    holder_rows = _filter_institution_location_holder_table_rows(
+        holder_rows,
+        holder_query,
     )
 
     metric_columns = st.columns(6)
@@ -1306,20 +1336,88 @@ def _render_institution_location_page(
             show_values=show_chart_values,
         )
 
+    if comparison_institution:
+        comparison_rows = _institution_location_comparison_rows(
+            summary_rows,
+            str(comparison_institution),
+        )
+        if comparison_rows:
+            st.subheader("Comparacao entre locais da instituicao")
+            comparison_chart_rows = _institution_location_chart_rows(comparison_rows)
+            comparison_left, comparison_right = st.columns(2)
+            with comparison_left:
+                st.subheader("Orcamento")
+                _bar_chart_with_total_labels(
+                    st,
+                    alt,
+                    _chart_dataframe(pd, comparison_chart_rows, _BUDGET_VALUE_COLUMN),
+                    x="local_label",
+                    y=_BUDGET_VALUE_COLUMN,
+                    color="#6A4C93",
+                    show_values=show_chart_values,
+                )
+            with comparison_right:
+                st.subheader("Projetos")
+                _bar_chart_with_total_labels(
+                    st,
+                    alt,
+                    _chart_dataframe(pd, comparison_chart_rows, _PROJECTS_COLUMN),
+                    x="local_label",
+                    y=_PROJECTS_COLUMN,
+                    color="#F2A541",
+                    show_values=show_chart_values,
+                )
+            _render_sortable_dataframe(st, pd.DataFrame(comparison_rows))
+
     tab_locations, tab_projects, tab_budget, tab_scholarships, tab_holders = st.tabs(
         ["Locais", "Projetos", "Orcamento", "Bolsas", "Bolsistas"]
     )
     with tab_locations:
-        _render_sortable_dataframe(st, pd.DataFrame(filtered_summary_rows))
+        location_frame = pd.DataFrame(filtered_summary_rows)
+        _render_sortable_dataframe(st, location_frame)
+        _download_dataframe_button(
+            st,
+            location_frame,
+            "Baixar locais",
+            "instituicoes_por_local_locais.csv",
+        )
     with tab_projects:
-        _render_sortable_dataframe(st, pd.DataFrame(project_rows))
+        project_frame = pd.DataFrame(project_rows)
+        _render_sortable_dataframe(st, project_frame)
+        _download_dataframe_button(
+            st,
+            project_frame,
+            "Baixar projetos",
+            "instituicoes_por_local_projetos.csv",
+        )
     with tab_budget:
-        _render_sortable_dataframe(st, pd.DataFrame(budget_rows))
+        budget_frame = pd.DataFrame(budget_rows)
+        _render_sortable_dataframe(st, budget_frame)
+        _download_dataframe_button(
+            st,
+            budget_frame,
+            "Baixar orcamento",
+            "instituicoes_por_local_orcamento.csv",
+        )
     with tab_scholarships:
-        _render_sortable_dataframe(st, pd.DataFrame(scholarship_rows))
+        scholarship_frame = pd.DataFrame(scholarship_rows)
+        _render_sortable_dataframe(st, scholarship_frame)
+        _download_dataframe_button(
+            st,
+            scholarship_frame,
+            "Baixar bolsas",
+            "instituicoes_por_local_bolsas.csv",
+        )
     with tab_holders:
         if holder_rows:
-            _render_sortable_dataframe(st, pd.DataFrame(holder_rows))
+            holder_frame = pd.DataFrame(holder_rows)
+            _render_sortable_dataframe(st, holder_frame)
+            _download_dataframe_button(
+                st,
+                holder_frame,
+                "Baixar bolsistas",
+                "instituicoes_por_local_bolsistas.csv",
+            )
         else:
             st.info("Nenhum bolsista encontrado para os filtros selecionados.")
 
@@ -2347,6 +2445,43 @@ def _institution_location_labels(rows: Sequence[Mapping[str, object]]) -> list[s
     return sorted((label for label in labels if label), key=str.casefold)
 
 
+def _institution_location_institution_options(
+    rows: Sequence[Mapping[str, object]],
+) -> list[str]:
+    labels = {str(row.get("Instituicao", "")).strip() for row in rows}
+    return sorted((label for label in labels if label), key=str.casefold)
+
+
+def _institution_location_comparison_rows(
+    rows: Sequence[Mapping[str, object]],
+    institution_name: str,
+) -> list[ReportRow]:
+    selected_name = institution_name.strip()
+    if not selected_name:
+        return []
+
+    filtered_rows = [
+        {
+            "Local": row.get("Local", ""),
+            "Sigla": row.get("Sigla", ""),
+            "Projetos": _int_value(row.get("Projetos")),
+            "Bolsas": _int_value(row.get("Bolsas")),
+            "Valor bolsas": _currency_label(row.get("Valor bolsas")),
+            "Orcamento contratado": _currency_label(row.get("Orcamento contratado")),
+        }
+        for row in rows
+        if str(row.get("Instituicao", "")).strip() == selected_name
+    ]
+
+    return sorted(
+        filtered_rows,
+        key=lambda row: (
+            -_decimal(row.get("Orcamento contratado")),
+            str(row.get("Local", "")).casefold(),
+        ),
+    )
+
+
 def _filter_institution_location_table_rows(
     rows: Sequence[Mapping[str, object]],
     *,
@@ -2366,6 +2501,54 @@ def _filter_institution_location_table_rows(
                 row.get("Instituicao"),
                 row.get("Sigla"),
                 row.get("Local"),
+            ),
+            query,
+        )
+    ]
+
+
+def _table_column_options(
+    rows: Sequence[Mapping[str, object]],
+    column: str,
+) -> list[str]:
+    labels = {str(row.get(column, "")).strip() for row in rows}
+    return sorted((label for label in labels if label), key=str.casefold)
+
+
+def _filter_table_rows_by_selected_values(
+    rows: Sequence[Mapping[str, object]],
+    column: str,
+    selected_values: Sequence[str],
+) -> list[ReportRow]:
+    selected_value_set = set(selected_values)
+    if not selected_value_set:
+        return [dict(row) for row in rows]
+
+    return [
+        dict(row)
+        for row in rows
+        if str(row.get(column, "")).strip() in selected_value_set
+    ]
+
+
+def _filter_institution_location_holder_table_rows(
+    rows: Sequence[Mapping[str, object]],
+    query: str,
+) -> list[ReportRow]:
+    normalized_query = _normalized_search_text(query)
+    if not normalized_query:
+        return [dict(row) for row in rows]
+
+    return [
+        dict(row)
+        for row in rows
+        if _institution_location_matches_query(
+            (
+                row.get("Bolsista"),
+                row.get("Tipo bolsa"),
+                row.get("Projeto"),
+                row.get("Instituicao"),
+                row.get("Sigla"),
             ),
             query,
         )
@@ -2877,6 +3060,20 @@ def _render_sortable_dataframe(st: Any, dataframe: Any) -> None:
         use_container_width=True,
         hide_index=True,
         column_config=_sortable_table_column_config(st, sortable_frame),
+    )
+
+
+def _download_dataframe_button(
+    st: Any,
+    dataframe: Any,
+    label: str,
+    file_name: str,
+) -> None:
+    st.download_button(
+        label,
+        data=dataframe.to_csv(index=False).encode("utf-8"),
+        file_name=file_name,
+        mime="text/csv",
     )
 
 
