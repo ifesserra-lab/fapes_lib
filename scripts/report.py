@@ -5,17 +5,28 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-from collections.abc import Mapping, Sequence
+import sys
+from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Final, TypeAlias
+from typing import Final, Protocol, TypeAlias, cast
 
 JsonObject: TypeAlias = dict[str, object]
 ReportRow: TypeAlias = dict[str, object]
 
+_PROJECT_ROOT: Final = Path(__file__).resolve().parents[1]
+_SRC_DIR: Final = _PROJECT_ROOT / "src"
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+if _SRC_DIR.exists() and str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+
 _DEFAULT_INPUT_DIR: Final = Path("downloads/projetos_por_edital")
 _DEFAULT_OUTPUT: Final = Path("downloads/relatorio_instituicoes.csv")
+_DEFAULT_ALLOCATION_MAX_WORKERS: Final = 4
+_DEFAULT_ALLOCATION_RETRIES: Final = 2
 _REPORT_FIELDS: Final = (
     "instituicao_nome",
     "instituicao_sigla",
@@ -61,6 +72,32 @@ _RESEARCHER_SCHOLARSHIP_SUMMARY_FIELDS: Final = (
     "quantidade_bolsas",
     "valor_total_bolsas",
 )
+_SCHOLARSHIP_ALLOCATION_FIELDS: Final = (
+    "arquivo_origem",
+    "projeto_id",
+    "projeto_titulo",
+    "situacao_descricao",
+    "coordenador_nome",
+    "instituicao_nome",
+    "instituicao_sigla",
+    "bolsista_pesquisador_id",
+    "bolsista_pesquisador_nome",
+    "formulario_bolsa_id",
+    "formulario_bolsa_situacao",
+    "formulario_bolsa_inicio",
+    "formulario_bolsa_termino",
+    "formulario_cancel_bolsa_data",
+    "formulario_subst_bolsa_data",
+    "bolsa_sigla",
+    "bolsa_nome",
+    "bolsa_nivel_id",
+    "bolsa_nivel_nome",
+    "bolsa_nivel_valor",
+    "qtd_bolsas_paga",
+    "valor_alocado_total",
+    "pagamentos",
+    "valor_pago_total",
+)
 _UNKNOWN_INSTITUTION = "Sem informacao"
 _EXCLUDED_PROJECT_STATUS_LABELS: Final = (
     "Projeto Não Contratado",
@@ -69,6 +106,19 @@ _EXCLUDED_PROJECT_STATUS_LABELS: Final = (
 _EXCLUDED_PROJECT_STATUSES: Final = frozenset(
     label.casefold() for label in _EXCLUDED_PROJECT_STATUS_LABELS
 )
+
+
+class ScholarshipAllocationEnvelope(Protocol):
+    """Envelope returned by the FAPES scholarship-holder endpoint."""
+
+    data: Sequence[Mapping[str, object]]
+
+
+class ScholarshipAllocationApi(Protocol):
+    """Subset of the FAPES API required by allocation reports."""
+
+    def listar_bolsistas(self, codprj: str | int) -> ScholarshipAllocationEnvelope:
+        """List scholarship holders allocated to a project."""
 
 
 @dataclass(slots=True)
@@ -95,6 +145,14 @@ class InstitutionTotals:
             "orcamento_contratado": _money(self.orcamento_contratado),
             "total_projetos": self.total_projetos,
         }
+
+
+@dataclass(frozen=True, slots=True)
+class ScholarshipAllocationProject:
+    index: int
+    path: Path
+    projeto: Mapping[str, object]
+    codprj: str
 
 
 @dataclass(slots=True)
@@ -269,6 +327,48 @@ def summarize_researcher_scholarships(
     return [total.to_row() for total in ordered_totals]
 
 
+def generate_scholarship_allocations_report(
+    input_dir: str | Path = _DEFAULT_INPUT_DIR,
+    *,
+    api_client: ScholarshipAllocationApi,
+    include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
+    max_workers: int = _DEFAULT_ALLOCATION_MAX_WORKERS,
+    retry_attempts: int = _DEFAULT_ALLOCATION_RETRIES,
+    limit: int | None = None,
+) -> list[ReportRow]:
+    """Fetch scholarship-holder allocations from FAPES for downloaded projects."""
+
+    projects = _scholarship_allocation_projects(
+        input_dir,
+        include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
+        limit=limit,
+    )
+    if not projects:
+        return []
+
+    rows_by_index: dict[int, list[ReportRow]] = {}
+    worker_count = min(_positive_worker_count(max_workers), len(projects))
+    with ThreadPoolExecutor(
+        max_workers=worker_count,
+        thread_name_prefix="fapes-bolsistas",
+    ) as executor:
+        futures = {
+            executor.submit(
+                _fetch_scholarship_allocations_for_project,
+                project,
+                api_client,
+                retry_attempts,
+            ): project.index
+            for project in projects
+        }
+        for future in as_completed(futures):
+            rows_by_index[futures[future]] = future.result()
+
+    return [row for index in sorted(rows_by_index) for row in rows_by_index[index]]
+
+
 def write_report(rows: Sequence[Mapping[str, object]], output: str | Path) -> Path:
     """Write a report as CSV or JSON according to the output file suffix."""
 
@@ -291,6 +391,15 @@ def write_researcher_scholarships_summary_report(
     """Write researcher scholarship summary rows as CSV or JSON."""
 
     return _write_rows(rows, output, _RESEARCHER_SCHOLARSHIP_SUMMARY_FIELDS)
+
+
+def write_scholarship_allocations_report(
+    rows: Sequence[Mapping[str, object]],
+    output: str | Path,
+) -> Path:
+    """Write scholarship allocation rows as CSV or JSON."""
+
+    return _write_rows(rows, output, _SCHOLARSHIP_ALLOCATION_FIELDS)
 
 
 def _write_rows(
@@ -317,12 +426,17 @@ def _write_rows(
     return destination
 
 
-def run(argv: Sequence[str] | None = None) -> int:
+def run(
+    argv: Sequence[str] | None = None,
+    *,
+    api_client_factory: Callable[[], ScholarshipAllocationApi] | None = None,
+) -> int:
     args = _parse_args(argv)
     rows = generate_report(args.input_dir)
     output = write_report(rows, args.output)
     researcher_scholarships_output = None
     researcher_scholarships_summary_output = None
+    scholarship_allocations_output = None
     if args.researcher_scholarships_output is not None:
         researcher_scholarship_rows = generate_researcher_scholarships_report(
             args.input_dir
@@ -341,6 +455,22 @@ def run(argv: Sequence[str] | None = None) -> int:
                 researcher_scholarship_summary_rows,
                 args.researcher_scholarships_summary_output,
             )
+        )
+
+    if args.scholarship_allocations_output is not None:
+        factory = (
+            api_client_factory if api_client_factory is not None else _build_api_client
+        )
+        scholarship_allocation_rows = generate_scholarship_allocations_report(
+            args.input_dir,
+            api_client=factory(),
+            max_workers=args.scholarship_allocation_max_workers,
+            retry_attempts=args.scholarship_allocation_retries,
+            limit=args.scholarship_allocation_limit,
+        )
+        scholarship_allocations_output = write_scholarship_allocations_report(
+            scholarship_allocation_rows,
+            args.scholarship_allocations_output,
         )
 
     total_projects = sum(_int_quantity(row["total_projetos"]) for row in rows)
@@ -365,6 +495,8 @@ def run(argv: Sequence[str] | None = None) -> int:
             "Resumo de pesquisadores e bolsas gerado: "
             f"{researcher_scholarships_summary_output}"
         )
+    if scholarship_allocations_output is not None:
+        print(f"Alocacao de bolsas gerada: {scholarship_allocations_output}")
     print(f"Instituicoes: {len(rows)}")
     print(f"Projetos: {total_projects}")
     print(f"Bolsas: {total_scholarships}")
@@ -413,7 +545,232 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
             "Quando omitido, este resumo nao e gerado."
         ),
     )
+    parser.add_argument(
+        "--scholarship-allocations-output",
+        type=Path,
+        default=None,
+        help=(
+            "Arquivo CSV ou JSON para buscar na FAPES as alocacoes reais "
+            "de bolsas por projeto via endpoint bolsistas."
+        ),
+    )
+    parser.add_argument(
+        "--scholarship-allocation-max-workers",
+        type=_positive_int,
+        default=_DEFAULT_ALLOCATION_MAX_WORKERS,
+        help=(
+            "Quantidade maxima de consultas simultaneas de bolsistas. "
+            f"Padrao: {_DEFAULT_ALLOCATION_MAX_WORKERS}"
+        ),
+    )
+    parser.add_argument(
+        "--scholarship-allocation-retries",
+        type=_non_negative_int,
+        default=_DEFAULT_ALLOCATION_RETRIES,
+        help=(
+            "Tentativas extras para cada consulta de bolsistas que falhar. "
+            f"Padrao: {_DEFAULT_ALLOCATION_RETRIES}"
+        ),
+    )
+    parser.add_argument(
+        "--scholarship-allocation-limit",
+        type=_positive_int,
+        default=None,
+        help=(
+            "Limita a quantidade de projetos consultados no endpoint bolsistas. "
+            "Use para validacoes rapidas; omitido consulta todos."
+        ),
+    )
     return parser.parse_args(argv)
+
+
+def _build_api_client() -> ScholarshipAllocationApi:
+    from fapes_lib.controllers import (  # noqa: PLC0415
+        FapesApiClient,
+        FapesAuthenticator,
+        FapesQueryController,
+    )
+    from fapes_lib.infrastructure.http_client import FapesHttpClient  # noqa: PLC0415
+    from fapes_lib.settings import FapesSettings  # noqa: PLC0415
+    from scripts.main import _secure_http_transport  # noqa: PLC0415
+
+    settings = FapesSettings.from_env()
+    http_client = FapesHttpClient(
+        base_url=settings.base_url,
+        timeout=settings.timeout_seconds,
+        transport=_secure_http_transport(settings),
+    )
+    authenticator = FapesAuthenticator(settings=settings, http_client=http_client)
+    token = authenticator.authenticate()
+    query_controller = FapesQueryController(http_client=http_client, token=token.value)
+    return cast(
+        ScholarshipAllocationApi,
+        FapesApiClient(query_controller=query_controller),
+    )
+
+
+def _positive_int(raw_value: str) -> int:
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("deve ser um numero inteiro positivo") from exc
+
+    if value < 1:
+        raise argparse.ArgumentTypeError("deve ser um numero inteiro positivo")
+
+    return value
+
+
+def _non_negative_int(raw_value: str) -> int:
+    try:
+        value = int(raw_value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "deve ser um numero inteiro nao negativo"
+        ) from exc
+
+    if value < 0:
+        raise argparse.ArgumentTypeError("deve ser um numero inteiro nao negativo")
+
+    return value
+
+
+def _scholarship_allocation_projects(
+    input_dir: str | Path,
+    *,
+    include_excluded_projects: bool,
+    selected_statuses: Sequence[str],
+    limit: int | None,
+) -> list[ScholarshipAllocationProject]:
+    projects: list[ScholarshipAllocationProject] = []
+    for path in sorted(Path(input_dir).glob("*.json")):
+        for projeto in _projects_from_file(path):
+            if _should_skip_project(
+                projeto,
+                include_excluded_projects,
+                selected_statuses,
+            ):
+                continue
+            codprj = _project_identifier(projeto)
+            if codprj is None:
+                continue
+            projects.append(
+                ScholarshipAllocationProject(
+                    index=len(projects),
+                    path=path,
+                    projeto=projeto,
+                    codprj=codprj,
+                )
+            )
+            if limit is not None and len(projects) >= limit:
+                return projects
+
+    return projects
+
+
+def _fetch_scholarship_allocations_for_project(
+    project: ScholarshipAllocationProject,
+    api_client: ScholarshipAllocationApi,
+    retry_attempts: int,
+) -> list[ReportRow]:
+    allocations = _list_bolsistas_with_retries(
+        api_client,
+        project.codprj,
+        retry_attempts=retry_attempts,
+    )
+    return [
+        _scholarship_allocation_row(project.path, project.projeto, allocation)
+        for allocation in allocations
+    ]
+
+
+def _list_bolsistas_with_retries(
+    api_client: ScholarshipAllocationApi,
+    codprj: str,
+    *,
+    retry_attempts: int,
+) -> list[Mapping[str, object]]:
+    retry_count = max(retry_attempts, 0)
+    for attempt in range(retry_count + 1):
+        try:
+            return _records_from_allocation_envelope(
+                api_client.listar_bolsistas(codprj)
+            )
+        except Exception:
+            if attempt >= retry_count:
+                raise
+
+    raise AssertionError("unreachable retry loop")
+
+
+def _records_from_allocation_envelope(
+    envelope: ScholarshipAllocationEnvelope,
+) -> list[Mapping[str, object]]:
+    return [item for item in envelope.data if isinstance(item, Mapping)]
+
+
+def _scholarship_allocation_row(
+    path: Path,
+    projeto: Mapping[str, object],
+    allocation: Mapping[str, object],
+) -> ReportRow:
+    instituicao_nome, instituicao_sigla = _institution_for_project(projeto)
+    payment_records = _envelope_records(allocation.get("folhas_pagamentos"))
+    scholarship_level_amount = _decimal(allocation.get("bolsa_nivel_valor"))
+    paid_quantity = _int_quantity(allocation.get("qtd_bolsas_paga"))
+    paid_amount = sum(
+        (
+            _decimal(payment.get("folha_pagamento_pesquisador_valor"))
+            for payment in payment_records
+        ),
+        Decimal("0"),
+    )
+    return {
+        "arquivo_origem": path.name,
+        "projeto_id": _text(projeto.get("projeto_id")),
+        "projeto_titulo": _text(projeto.get("projeto_titulo")),
+        "situacao_descricao": _text(projeto.get("situacao_descricao")),
+        "coordenador_nome": _text(projeto.get("coordenador_nome")),
+        "instituicao_nome": instituicao_nome,
+        "instituicao_sigla": instituicao_sigla,
+        "bolsista_pesquisador_id": _text(allocation.get("bolsista_pesquisador_id")),
+        "bolsista_pesquisador_nome": _text(allocation.get("bolsista_pesquisador_nome"))
+        or _UNKNOWN_INSTITUTION,
+        "formulario_bolsa_id": _text(allocation.get("formulario_bolsa_id")),
+        "formulario_bolsa_situacao": _text(allocation.get("formulario_bolsa_situacao")),
+        "formulario_bolsa_inicio": _text(allocation.get("formulario_bolsa_inicio")),
+        "formulario_bolsa_termino": _text(allocation.get("formulario_bolsa_termino")),
+        "formulario_cancel_bolsa_data": _text(
+            allocation.get("formulario_cancel_bolsa_data")
+        ),
+        "formulario_subst_bolsa_data": _text(
+            allocation.get("formulario_subst_bolsa_data")
+        ),
+        "bolsa_sigla": _text(allocation.get("bolsa_sigla")),
+        "bolsa_nome": _text(allocation.get("bolsa_nome")),
+        "bolsa_nivel_id": _text(allocation.get("bolsa_nivel_id")),
+        "bolsa_nivel_nome": _text(allocation.get("bolsa_nivel_nome")),
+        "bolsa_nivel_valor": _money(scholarship_level_amount),
+        "qtd_bolsas_paga": paid_quantity,
+        "valor_alocado_total": _money(
+            scholarship_level_amount * Decimal(paid_quantity)
+        ),
+        "pagamentos": len(payment_records),
+        "valor_pago_total": _money(paid_amount),
+    }
+
+
+def _project_identifier(projeto: Mapping[str, object]) -> str | None:
+    for field_name in ("projeto_id", "codprj"):
+        value = _text(projeto.get(field_name))
+        if value:
+            return value
+
+    return None
+
+
+def _positive_worker_count(max_workers: int) -> int:
+    return max(max_workers, 1)
 
 
 def _projects_from_file(path: Path) -> list[Mapping[str, object]]:

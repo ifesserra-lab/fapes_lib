@@ -3,10 +3,53 @@ from __future__ import annotations
 import csv
 import importlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
+
+
+@dataclass(frozen=True, slots=True)
+class FakeAllocationEnvelope:
+    data: list[dict[str, object]]
+
+
+class FakeScholarshipAllocationApi:
+    def __init__(self) -> None:
+        self.calls: list[str | int] = []
+
+    def listar_bolsistas(self, codprj: str | int) -> FakeAllocationEnvelope:
+        self.calls.append(codprj)
+        if str(codprj) != "101":
+            return FakeAllocationEnvelope([])
+
+        return FakeAllocationEnvelope(
+            [
+                {
+                    "formulario_bolsa_id": "9001",
+                    "formulario_bolsa_situacao": "1",
+                    "bolsista_pesquisador_id": "501",
+                    "bolsista_pesquisador_nome": "Aluno Bolsista",
+                    "bolsista_pesquisador_cpf": "00000000000",
+                    "formulario_bolsa_inicio": "01/02/2024",
+                    "formulario_bolsa_termino": "01/02/2025",
+                    "banco_id": "1",
+                    "formulario_numero_agencia": "123",
+                    "formulario_numero_conta": "456",
+                    "bolsa_nivel_id": "51",
+                    "bolsa_nivel_nome": "ICT",
+                    "bolsa_nivel_valor": "700,00",
+                    "bolsa_nome": "Iniciacao Cientifica",
+                    "bolsa_sigla": "ICT",
+                    "qtd_bolsas_paga": "2",
+                    "folhas_pagamentos": [
+                        {"folha_pagamento_pesquisador_valor": "700"},
+                        {"folha_pagamento_pesquisador_valor": "700,50"},
+                    ],
+                }
+            ]
+        )
 
 
 def test_report_aggregates_scholarships_and_budget_by_institution(
@@ -243,6 +286,84 @@ def test_report_cli_writes_researcher_scholarships_summary_csv(
             "valor_total_bolsas": "1.200,00",
         }
     ]
+
+
+def test_report_cli_writes_scholarship_allocations_from_fapes_api(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    report = cast(Any, importlib.import_module("scripts.report"))
+    input_dir = tmp_path / "projetos_por_edital"
+    output_file = tmp_path / "relatorio.csv"
+    allocations_file = tmp_path / "alocacao_bolsas.csv"
+    api_client = FakeScholarshipAllocationApi()
+    input_dir.mkdir()
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                projeto_id="101",
+                projeto_titulo="Projeto com bolsista",
+                coordenador_nome="Maria Silva",
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[],
+                orcamento=[],
+                situacao_descricao="Projeto Em Andamento",
+            )
+        ],
+    )
+
+    exit_code = report.run(
+        [
+            "--input-dir",
+            str(input_dir),
+            "--output",
+            str(output_file),
+            "--scholarship-allocations-output",
+            str(allocations_file),
+            "--scholarship-allocation-max-workers",
+            "1",
+        ],
+        api_client_factory=lambda: api_client,
+    )
+
+    assert exit_code == 0
+    assert api_client.calls == ["101"]
+    with allocations_file.open(encoding="utf-8", newline="") as file:
+        rows = list(csv.DictReader(file))
+
+    assert rows == [
+        {
+            "arquivo_origem": "edital_1_projetos.json",
+            "projeto_id": "101",
+            "projeto_titulo": "Projeto com bolsista",
+            "situacao_descricao": "Projeto Em Andamento",
+            "coordenador_nome": "Maria Silva",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "bolsista_pesquisador_id": "501",
+            "bolsista_pesquisador_nome": "Aluno Bolsista",
+            "formulario_bolsa_id": "9001",
+            "formulario_bolsa_situacao": "1",
+            "formulario_bolsa_inicio": "01/02/2024",
+            "formulario_bolsa_termino": "01/02/2025",
+            "formulario_cancel_bolsa_data": "",
+            "formulario_subst_bolsa_data": "",
+            "bolsa_sigla": "ICT",
+            "bolsa_nome": "Iniciacao Cientifica",
+            "bolsa_nivel_id": "51",
+            "bolsa_nivel_nome": "ICT",
+            "bolsa_nivel_valor": "700,00",
+            "qtd_bolsas_paga": "2",
+            "valor_alocado_total": "1.400,00",
+            "pagamentos": "2",
+            "valor_pago_total": "1.400,50",
+        }
+    ]
+    assert "bolsista_pesquisador_cpf" not in rows[0]
+    assert "formulario_numero_conta" not in rows[0]
 
 
 def test_report_keeps_same_institution_name_with_different_acronyms_separate(
@@ -765,6 +886,78 @@ def test_report_generates_researcher_scholarships_summary_rows(
     assert len(all_rows) == 2
     assert all_rows[0]["pesquisador_nome"] == "Joao Souza"
     assert all_rows[1]["pesquisador_nome"] == "Maria Silva"
+
+
+def test_report_fetches_scholarship_allocations_from_fapes_api(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    report = cast(Any, importlib.import_module("scripts.report"))
+    api_client = FakeScholarshipAllocationApi()
+    input_dir = tmp_path / "projetos_por_edital"
+    input_dir.mkdir()
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                projeto_id="101",
+                projeto_titulo="Projeto com bolsista",
+                coordenador_nome="Maria Silva",
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[],
+                orcamento=[],
+                situacao_descricao="Projeto Em Andamento",
+            ),
+            _project(
+                projeto_id="102",
+                projeto_titulo="Projeto nao contratado",
+                coordenador_nome="Joao Souza",
+                instituicao_nome="Instituto Federal do Espirito Santo",
+                instituicao_sigla="IFES",
+                bolsas=[],
+                orcamento=[],
+                situacao_descricao="Projeto Não Contratado",
+            ),
+        ],
+    )
+
+    rows = report.generate_scholarship_allocations_report(
+        input_dir,
+        api_client=api_client,
+        max_workers=1,
+    )
+
+    assert api_client.calls == ["101"]
+    assert rows == [
+        {
+            "arquivo_origem": "edital_1_projetos.json",
+            "projeto_id": "101",
+            "projeto_titulo": "Projeto com bolsista",
+            "situacao_descricao": "Projeto Em Andamento",
+            "coordenador_nome": "Maria Silva",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "bolsista_pesquisador_id": "501",
+            "bolsista_pesquisador_nome": "Aluno Bolsista",
+            "formulario_bolsa_id": "9001",
+            "formulario_bolsa_situacao": "1",
+            "formulario_bolsa_inicio": "01/02/2024",
+            "formulario_bolsa_termino": "01/02/2025",
+            "formulario_cancel_bolsa_data": "",
+            "formulario_subst_bolsa_data": "",
+            "bolsa_sigla": "ICT",
+            "bolsa_nome": "Iniciacao Cientifica",
+            "bolsa_nivel_id": "51",
+            "bolsa_nivel_nome": "ICT",
+            "bolsa_nivel_valor": "700,00",
+            "qtd_bolsas_paga": 2,
+            "valor_alocado_total": "1.400,00",
+            "pagamentos": 2,
+            "valor_pago_total": "1.400,50",
+        }
+    ]
 
 
 def _write_project_file(path: Path, projetos: list[dict[str, object]]) -> None:
