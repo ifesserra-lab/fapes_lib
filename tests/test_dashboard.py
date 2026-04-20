@@ -771,6 +771,37 @@ def test_dashboard_formats_financial_values_for_display(
     assert display_rows[0]["valor_bolsas"] == "1.234,56"
 
 
+def test_dashboard_converts_financial_table_columns_to_numeric_for_sorting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    pd = importlib.import_module("pandas")
+    frame = pd.DataFrame(
+        [
+            {
+                "Bolsista": "Valor menor",
+                "Valor alocado": "R$ 900,00",
+                "Valor pago": "0,00",
+            },
+            {
+                "Bolsista": "Valor maior",
+                "Valor alocado": "R$ 10.000,00",
+                "Valor pago": "R$ 1.500,50",
+            },
+        ]
+    )
+
+    sortable_frame = dashboard._sortable_table_dataframe(frame)
+
+    assert list(sortable_frame["Valor alocado"]) == [900.0, 10000.0]
+    assert list(sortable_frame["Valor pago"]) == [0.0, 1500.5]
+    assert list(sortable_frame.sort_values("Valor alocado")["Bolsista"]) == [
+        "Valor menor",
+        "Valor maior",
+    ]
+
+
 def test_dashboard_builds_chart_rows_with_total_value_labels(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

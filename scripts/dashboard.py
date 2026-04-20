@@ -51,6 +51,27 @@ _FINANCIAL_VOLUME_VALUE_COLUMN = "valor_financeiro"
 _RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN = "valor_total_bolsas"
 _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN = "valor_alocado_total"
 _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN = "valor_pago_total"
+_TABLE_MONEY_COLUMNS: Final = frozenset(
+    {
+        _BUDGET_COLUMN,
+        _SCHOLARSHIP_AMOUNT_COLUMN,
+        _RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN,
+        _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN,
+        _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
+        "Orcamento contratado",
+        "Valor bolsas",
+        "Valor contratado",
+        "Valor alocado",
+        "Valor pago",
+        "Valor total",
+        "Valor unitario",
+        "Total financeiro",
+        "Volume financeiro",
+        "valor_total",
+        "valor_unitario",
+        "valor_total_bolsas",
+    }
+)
 _UNKNOWN_INSTITUTION = "Sem informacao"
 _NO_MATCH_INSTITUTION_LABEL = "__sem_instituicao__"
 _TOOLTIP_FIELD_GROUPS: Final = (
@@ -516,7 +537,7 @@ def _render_summary_page(
         )
 
     with tab_table:
-        st.dataframe(table_frame, use_container_width=True, hide_index=True)
+        _render_sortable_dataframe(st, table_frame)
         csv_payload = table_frame.to_csv(index=False).encode("utf-8")
         st.download_button(
             "Baixar CSV",
@@ -617,11 +638,7 @@ def _render_summary_page(
             )
 
             st.subheader("Resumo por pesquisador")
-            st.dataframe(
-                researcher_summary_frame,
-                use_container_width=True,
-                hide_index=True,
-            )
+            _render_sortable_dataframe(st, researcher_summary_frame)
 
         summary_csv_payload = researcher_summary_frame.to_csv(index=False).encode(
             "utf-8"
@@ -643,11 +660,7 @@ def _render_summary_page(
         )
         if not unknown_researcher_frame.empty:
             st.subheader("Auditoria de pesquisadores sem informacao")
-            st.dataframe(
-                unknown_researcher_frame,
-                use_container_width=True,
-                hide_index=True,
-            )
+            _render_sortable_dataframe(st, unknown_researcher_frame)
             unknown_csv_payload = unknown_researcher_frame.to_csv(index=False).encode(
                 "utf-8"
             )
@@ -662,7 +675,7 @@ def _render_summary_page(
         if audit_frame.empty:
             st.info("Nenhum projeto encontrado pela regra de exclusao.")
         else:
-            st.dataframe(audit_frame, use_container_width=True, hide_index=True)
+            _render_sortable_dataframe(st, audit_frame)
             audit_csv_payload = audit_frame.to_csv(index=False).encode("utf-8")
             st.download_button(
                 "Baixar projetos excluidos",
@@ -804,12 +817,11 @@ def _render_institution_detail_page(
                 show_values=show_chart_values,
             )
 
-            st.dataframe(
+            _render_sortable_dataframe(
+                st,
                 timeline_frame[["ano", _BUDGET_COLUMN, _BUDGET_VALUE_COLUMN]].drop(
                     columns=[_BUDGET_VALUE_COLUMN]
                 ),
-                use_container_width=True,
-                hide_index=True,
             )
 
     with tab_scholarships:
@@ -844,7 +856,8 @@ def _render_institution_detail_page(
                     show_values=show_chart_values,
                 )
 
-            st.dataframe(
+            _render_sortable_dataframe(
+                st,
                 timeline_frame[
                     [
                         "ano",
@@ -853,8 +866,6 @@ def _render_institution_detail_page(
                         _SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
                     ]
                 ].drop(columns=[_SCHOLARSHIP_AMOUNT_VALUE_COLUMN]),
-                use_container_width=True,
-                hide_index=True,
             )
 
     with tab_budget_details:
@@ -868,13 +879,12 @@ def _render_institution_detail_page(
             color="#6A4C93",
             show_values=show_chart_values,
         )
-        st.dataframe(
+        _render_sortable_dataframe(
+            st,
             _drop_existing_columns(
                 pd.DataFrame(budget_category_rows),
                 [_BUDGET_VALUE_COLUMN],
             ),
-            use_container_width=True,
-            hide_index=True,
         )
 
     with tab_scholarship_details:
@@ -917,10 +927,9 @@ def _render_institution_detail_page(
         scholarship_details_frame = pd.DataFrame(scholarship_detail_rows)
         if not scholarship_details_frame.empty:
             st.subheader("Tipos de bolsas contratadas")
-            st.dataframe(
+            _render_sortable_dataframe(
+                st,
                 pd.DataFrame(_scholarship_detail_table_rows(scholarship_detail_rows)),
-                use_container_width=True,
-                hide_index=True,
             )
 
     with tab_projects:
@@ -930,17 +939,13 @@ def _render_institution_detail_page(
         )
         if not responsible_volume_frame.empty:
             st.subheader("Volume financeiro por responsavel")
-            st.dataframe(
-                responsible_volume_frame,
-                use_container_width=True,
-                hide_index=True,
-            )
+            _render_sortable_dataframe(st, responsible_volume_frame)
 
         st.subheader("Projetos")
         project_detail_frame = pd.DataFrame(
             _project_detail_table_rows(filtered_project_rows)
         )
-        st.dataframe(project_detail_frame, use_container_width=True, hide_index=True)
+        _render_sortable_dataframe(st, project_detail_frame)
         csv_payload = project_detail_frame.to_csv(index=False).encode("utf-8")
         st.download_button(
             "Baixar projetos",
@@ -1019,7 +1024,7 @@ def _render_researcher_page(
     researcher_name_frame = pd.DataFrame(_researcher_name_rows(filtered_project_rows))
     if not researcher_name_frame.empty:
         st.subheader("Pesquisadores encontrados")
-        st.dataframe(researcher_name_frame, use_container_width=True, hide_index=True)
+        _render_sortable_dataframe(st, researcher_name_frame)
 
     timeline_frame = pd.DataFrame(timeline_rows)
     if not timeline_frame.empty:
@@ -1055,15 +1060,11 @@ def _render_researcher_page(
                 stack=_financial_chart_stack_from_mode(str(financial_chart_mode)),
                 show_values=show_chart_values,
             )
-            st.dataframe(
-                financial_timeline_table_frame,
-                use_container_width=True,
-                hide_index=True,
-            )
+            _render_sortable_dataframe(st, financial_timeline_table_frame)
 
     st.subheader("Projetos")
     project_frame = pd.DataFrame(_researcher_project_table_rows(filtered_project_rows))
-    st.dataframe(project_frame, use_container_width=True, hide_index=True)
+    _render_sortable_dataframe(st, project_frame)
     csv_payload = project_frame.to_csv(index=False).encode("utf-8")
     st.download_button(
         "Baixar projetos do pesquisador",
@@ -1160,10 +1161,10 @@ def _render_scholarship_allocations_page(
             color="#28666E",
             show_values=show_chart_values,
         )
-        st.dataframe(summary_frame, use_container_width=True, hide_index=True)
+        _render_sortable_dataframe(st, summary_frame)
 
     with tab_table:
-        st.dataframe(table_frame, use_container_width=True, hide_index=True)
+        _render_sortable_dataframe(st, table_frame)
         csv_payload = table_frame.to_csv(index=False).encode("utf-8")
         st.download_button(
             "Baixar CSV de bolsistas",
@@ -2219,6 +2220,42 @@ _FINANCIAL_CHART_COLUMNS: Final = frozenset(
 
 def _display_dataframe(pd_module: Any, rows: Sequence[Mapping[str, object]]) -> Any:
     return pd_module.DataFrame(_display_rows(rows))
+
+
+def _render_sortable_dataframe(st: Any, dataframe: Any) -> None:
+    sortable_frame = _sortable_table_dataframe(dataframe)
+    st.dataframe(
+        sortable_frame,
+        use_container_width=True,
+        hide_index=True,
+        column_config=_sortable_table_column_config(st, sortable_frame),
+    )
+
+
+def _sortable_table_dataframe(dataframe: Any) -> Any:
+    sortable_frame = dataframe.copy()
+    for column in _sortable_table_money_columns(sortable_frame):
+        sortable_frame[column] = sortable_frame[column].map(
+            lambda value: float(_decimal(value))
+        )
+
+    return sortable_frame
+
+
+def _sortable_table_column_config(st: Any, dataframe: Any) -> dict[str, Any]:
+    return {
+        column: st.column_config.NumberColumn(column, format="R$ %.2f")
+        for column in _sortable_table_money_columns(dataframe)
+    }
+
+
+def _sortable_table_money_columns(dataframe: Any) -> list[str]:
+    try:
+        columns = list(dataframe.columns)
+    except AttributeError:
+        return []
+
+    return [column for column in columns if column in _TABLE_MONEY_COLUMNS]
 
 
 def _summary_totals(rows: Sequence[Mapping[str, object]]) -> DashboardTotals:
