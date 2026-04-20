@@ -1448,6 +1448,58 @@ def test_dashboard_builds_budget_detail_table_rows(
     ]
 
 
+def test_dashboard_builds_budget_item_table_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    rows = [
+        {
+            "projeto_id": "101",
+            "projeto_titulo": "Projeto da Maria",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "categoria_orcamento": "Material",
+            "descricao_categoria": "Material de Consumo",
+            "orcamento_contratado": "1.234,50",
+        }
+    ]
+
+    table_rows = dashboard._budget_item_table_rows(rows)
+
+    assert table_rows == [
+        {
+            "Projeto ID": "101",
+            "Projeto": "Projeto da Maria",
+            "Instituicao": "Universidade Federal do Espirito Santo",
+            "Sigla": "UFES - VITÓRIA",
+            "Rubrica": "Material",
+            "Descricao": "Material de Consumo",
+            "Orcamento contratado": "R$ 1.234,50",
+        }
+    ]
+
+
+def test_dashboard_filters_scholarship_allocations_by_researcher_projects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    project_rows = [{"projeto_id": "101"}, {"projeto_id": "102"}]
+    allocation_rows = [
+        {"projeto_id": "101", "bolsista_pesquisador_nome": "Aluno A"},
+        {"projeto_id": "999", "bolsista_pesquisador_nome": "Aluno B"},
+        {"projeto_id": "102", "bolsista_pesquisador_nome": "Aluno C"},
+    ]
+
+    filtered_rows = dashboard._researcher_scholarship_allocation_rows(
+        allocation_rows,
+        project_rows,
+    )
+
+    assert filtered_rows == [allocation_rows[0], allocation_rows[2]]
+
+
 class _FakeColumnConfig:
     @staticmethod
     def NumberColumn(label: str, *, format: str) -> dict[str, str]:

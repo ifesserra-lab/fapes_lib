@@ -135,6 +135,64 @@ def load_researcher_budget_categories(
     ]
 
 
+def load_researcher_budget_items(
+    input_dir: str | Path,
+    researcher_query: str,
+    *,
+    include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
+) -> list[BudgetCategoryRow]:
+    """Return contracted budget category items for researcher/coordinator projects."""
+
+    normalized_query = researcher_query.casefold().strip()
+    if not normalized_query:
+        return []
+
+    rows: list[BudgetCategoryRow] = []
+    for path in sorted(Path(input_dir).glob("*.json")):
+        for projeto in _projects_from_file(path):
+            if _should_skip_project(
+                projeto,
+                include_excluded_projects,
+                selected_statuses,
+            ):
+                continue
+            if (
+                normalized_query
+                not in _text(projeto.get("coordenador_nome")).casefold()
+            ):
+                continue
+
+            institution_name, institution_acronym = _institution_for_project(projeto)
+            for item in _envelope_records(projeto.get("orcamento_contratado")):
+                amount = _decimal(item.get("valor_categoria"))
+                rows.append(
+                    {
+                        "projeto_id": _text(projeto.get("projeto_id")),
+                        "projeto_titulo": _text(projeto.get("projeto_titulo")),
+                        "coordenador_nome": _text(projeto.get("coordenador_nome")),
+                        "instituicao_nome": institution_name,
+                        "instituicao_sigla": institution_acronym,
+                        _CATEGORY_COLUMN: _readable_category(
+                            item.get("descricao_categoria")
+                        ),
+                        "descricao_categoria": _text(item.get("descricao_categoria"))
+                        or _UNKNOWN_CATEGORY,
+                        _BUDGET_COLUMN: _money(amount),
+                        _BUDGET_VALUE_COLUMN: float(amount),
+                    }
+                )
+
+    return sorted(
+        rows,
+        key=lambda row: (
+            _text(row.get("projeto_id")),
+            _text(row.get(_CATEGORY_COLUMN)).casefold(),
+            _text(row.get("descricao_categoria")).casefold(),
+        ),
+    )
+
+
 def _readable_category(value: object) -> str:
     description = _text(value).casefold()
     if not description:

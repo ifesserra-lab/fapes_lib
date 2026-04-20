@@ -180,6 +180,78 @@ def test_budget_categories_group_budget_by_researcher_query(
     ]
 
 
+def test_budget_categories_load_researcher_budget_items(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    budget_categories = cast(Any, importlib.import_module("scripts.budget_categories"))
+    input_dir = tmp_path / "projetos_por_edital"
+    input_dir.mkdir()
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                projeto_id="101",
+                projeto_titulo="Projeto da Maria",
+                coordenador_nome="Maria Silva",
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                orcamento=[
+                    {
+                        "descricao_categoria": "Material de Consumo",
+                        "valor_categoria": "1000",
+                    },
+                    {
+                        "descricao_categoria": "Equipamentos e Material Permanente",
+                        "valor_categoria": "2000",
+                    },
+                ],
+            ),
+            _project(
+                projeto_id="202",
+                projeto_titulo="Projeto do Joao",
+                coordenador_nome="Joao Souza",
+                instituicao_nome="Instituto Federal do Espirito Santo",
+                instituicao_sigla="IFES",
+                orcamento=[
+                    {
+                        "descricao_categoria": "Material de Consumo",
+                        "valor_categoria": "9999",
+                    },
+                ],
+            ),
+        ],
+    )
+
+    rows = budget_categories.load_researcher_budget_items(input_dir, "maria")
+
+    assert rows == [
+        {
+            "projeto_id": "101",
+            "projeto_titulo": "Projeto da Maria",
+            "coordenador_nome": "Maria Silva",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "categoria_orcamento": "Capital",
+            "descricao_categoria": "Equipamentos e Material Permanente",
+            "orcamento_contratado": "2.000,00",
+            "orcamento_contratado_valor": 2000.0,
+        },
+        {
+            "projeto_id": "101",
+            "projeto_titulo": "Projeto da Maria",
+            "coordenador_nome": "Maria Silva",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "categoria_orcamento": "Material",
+            "descricao_categoria": "Material de Consumo",
+            "orcamento_contratado": "1.000,00",
+            "orcamento_contratado_valor": 1000.0,
+        },
+    ]
+
+
 def test_budget_categories_exclude_not_contracted_projects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -255,6 +327,8 @@ def _write_project_file(path: Path, projetos: list[dict[str, object]]) -> None:
 
 def _project(
     *,
+    projeto_id: str = "",
+    projeto_titulo: str = "",
     coordenador_nome: str = "",
     instituicao_nome: str,
     instituicao_sigla: str,
@@ -262,6 +336,8 @@ def _project(
     situacao_descricao: str = "Projeto aprovado",
 ) -> dict[str, object]:
     return {
+        "projeto_id": projeto_id,
+        "projeto_titulo": projeto_titulo,
         "coordenador_nome": coordenador_nome,
         "situacao_descricao": situacao_descricao,
         "dados_coordenador": {
