@@ -1500,6 +1500,138 @@ def test_dashboard_filters_scholarship_allocations_by_researcher_projects(
     assert filtered_rows == [allocation_rows[0], allocation_rows[2]]
 
 
+def test_dashboard_flattens_institution_location_report_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    rows = [
+        {
+            "instituicao_nome": "Instituto Federal do Espirito Santo",
+            "total_locais": 1,
+            "total_projetos": 1,
+            "quantidade_bolsas": 2,
+            "valor_bolsas": "1.200,00",
+            "orcamento_contratado": "3.000,00",
+            "locais": [
+                {
+                    "instituicao_sigla": "IFES - SERRA",
+                    "local": "SERRA",
+                    "total_projetos": 1,
+                    "quantidade_bolsas": 2,
+                    "valor_bolsas": "1.200,00",
+                    "orcamento_contratado": "3.000,00",
+                    "projetos": [
+                        {
+                            "projeto_id": "101",
+                            "projeto_titulo": "Projeto Serra",
+                            "coordenador_nome": "Maria Silva",
+                            "ano": 2025,
+                            "quantidade_bolsas": 2,
+                            "valor_bolsas": "1.200,00",
+                            "orcamento_contratado": "3.000,00",
+                            "detalhe_orcamento_contratado": [
+                                {
+                                    "rubrica": "Material de consumo",
+                                    "descricao_categoria": "Material de Consumo",
+                                    "valor": "1.000,00",
+                                }
+                            ],
+                            "tipos_bolsa": [
+                                {
+                                    "tipo_bolsa": "ICT",
+                                    "nome_bolsa": "Iniciacao Cientifica",
+                                    "quantidade": 2,
+                                    "duracao": 2,
+                                    "valor_unitario": "300,00",
+                                    "valor_total": "1.200,00",
+                                }
+                            ],
+                            "bolsistas": [
+                                {
+                                    "bolsista_pesquisador_nome": "Aluno Bolsista",
+                                    "bolsa_sigla": "ICT",
+                                    "bolsa_nome": "Iniciacao Cientifica",
+                                    "qtd_bolsas_paga": 2,
+                                    "valor_alocado_total": "1.400,00",
+                                    "valor_pago_total": "1.400,50",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+
+    assert dashboard._institution_location_summary_rows(rows) == [
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES - SERRA",
+            "Local": "SERRA",
+            "Projetos": 1,
+            "Bolsas": 2,
+            "Valor bolsas": "R$ 1.200,00",
+            "Orcamento contratado": "R$ 3.000,00",
+        }
+    ]
+    assert dashboard._institution_location_project_rows(rows) == [
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES - SERRA",
+            "Local": "SERRA",
+            "Projeto ID": "101",
+            "Projeto": "Projeto Serra",
+            "Responsavel": "Maria Silva",
+            "Ano": 2025,
+            "Bolsas": 2,
+            "Valor bolsas": "R$ 1.200,00",
+            "Orcamento contratado": "R$ 3.000,00",
+        }
+    ]
+    assert dashboard._institution_location_budget_rows(rows) == [
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES - SERRA",
+            "Local": "SERRA",
+            "Projeto ID": "101",
+            "Projeto": "Projeto Serra",
+            "Rubrica": "Material de consumo",
+            "Descricao": "Material de Consumo",
+            "Valor": "R$ 1.000,00",
+        }
+    ]
+    assert dashboard._institution_location_scholarship_rows(rows) == [
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES - SERRA",
+            "Local": "SERRA",
+            "Projeto ID": "101",
+            "Projeto": "Projeto Serra",
+            "Tipo bolsa": "ICT",
+            "Nome da bolsa": "Iniciacao Cientifica",
+            "Quantidade": 2,
+            "Duracao": 2,
+            "Valor unitario": "R$ 300,00",
+            "Valor total": "R$ 1.200,00",
+        }
+    ]
+    assert dashboard._institution_location_holder_rows(rows) == [
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES - SERRA",
+            "Local": "SERRA",
+            "Projeto ID": "101",
+            "Projeto": "Projeto Serra",
+            "Bolsista": "Aluno Bolsista",
+            "Tipo bolsa": "ICT | Iniciacao Cientifica",
+            "Bolsas pagas": 2,
+            "Valor alocado": "R$ 1.400,00",
+            "Valor pago": "R$ 1.400,50",
+        }
+    ]
+
+
 class _FakeColumnConfig:
     @staticmethod
     def NumberColumn(label: str, *, format: str) -> dict[str, str]:

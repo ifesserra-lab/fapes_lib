@@ -451,6 +451,219 @@ def test_report_keeps_same_institution_name_with_different_acronyms_separate(
     ]
 
 
+def test_report_groups_projects_by_institution_location_with_project_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    report = cast(Any, importlib.import_module("scripts.report"))
+    input_dir = tmp_path / "projetos_por_edital"
+    input_dir.mkdir()
+    allocations_file = tmp_path / "relatorio_alocacao_bolsas.json"
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                projeto_id="101",
+                projeto_titulo="Projeto Serra",
+                coordenador_nome="Maria Silva",
+                instituicao_nome="Instituto Federal do Espirito Santo",
+                instituicao_sigla="IFES - SERRA",
+                bolsas=[
+                    {
+                        "sigla": "ICT",
+                        "nome": "Iniciacao Cientifica",
+                        "orcamento_quantidade": "2",
+                        "orcamento_custo": "300",
+                        "orcamento_duracao": "2",
+                    }
+                ],
+                orcamento=[
+                    {
+                        "descricao_categoria": "Material de Consumo",
+                        "valor_categoria": "1000",
+                    },
+                    {
+                        "descricao_categoria": "Outros Serviços de Terceiros",
+                        "valor_categoria": "2000",
+                    },
+                ],
+                valor_bolsa="1200",
+                projeto_data_envio="15/03/2025",
+                situacao_descricao="Projeto Em Andamento",
+            ),
+            _project(
+                projeto_id="102",
+                projeto_titulo="Projeto Vitoria",
+                coordenador_nome="Joao Souza",
+                instituicao_nome="Instituto Federal do Espirito Santo",
+                instituicao_sigla="IFES - VITÓRIA",
+                bolsas=[{"sigla": "MSC", "nome": "Mestrado", "vlrtot": "500"}],
+                orcamento=[
+                    {
+                        "descricao_categoria": "Equipamentos e Material Permanente",
+                        "valor_categoria": "300",
+                    }
+                ],
+                valor_bolsa="500",
+                projeto_data_envio="2024-05-10",
+                situacao_descricao="Projeto Em Andamento",
+            ),
+        ],
+    )
+    allocations_file.write_text(
+        json.dumps(
+            [
+                {
+                    "projeto_id": "101",
+                    "bolsista_pesquisador_id": "501",
+                    "bolsista_pesquisador_nome": "Aluno Bolsista",
+                    "formulario_bolsa_id": "9001",
+                    "formulario_bolsa_situacao": "Ativo",
+                    "formulario_bolsa_inicio": "01/02/2025",
+                    "formulario_bolsa_termino": "01/02/2026",
+                    "bolsa_sigla": "ICT",
+                    "bolsa_nome": "Iniciacao Cientifica",
+                    "bolsa_nivel_nome": "ICT",
+                    "bolsa_nivel_valor": "700,00",
+                    "qtd_bolsas_paga": 2,
+                    "valor_alocado_total": "1.400,00",
+                    "pagamentos": 2,
+                    "valor_pago_total": "1.400,50",
+                },
+                {
+                    "projeto_id": "999",
+                    "bolsista_pesquisador_nome": "Fora do projeto",
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    rows = report.generate_projects_by_institution_location(
+        input_dir,
+        scholarship_allocations_path=allocations_file,
+    )
+
+    assert rows == [
+        {
+            "instituicao_nome": "Instituto Federal do Espirito Santo",
+            "total_locais": 2,
+            "total_projetos": 2,
+            "quantidade_bolsas": 3,
+            "valor_bolsas": "1.700,00",
+            "orcamento_contratado": "3.300,00",
+            "locais": [
+                {
+                    "instituicao_sigla": "IFES - SERRA",
+                    "local": "SERRA",
+                    "total_projetos": 1,
+                    "quantidade_bolsas": 2,
+                    "valor_bolsas": "1.200,00",
+                    "orcamento_contratado": "3.000,00",
+                    "projetos": [
+                        {
+                            "arquivo_origem": "edital_1_projetos.json",
+                            "projeto_id": "101",
+                            "projeto_titulo": "Projeto Serra",
+                            "coordenador_nome": "Maria Silva",
+                            "situacao_descricao": "Projeto Em Andamento",
+                            "ano": 2025,
+                            "quantidade_bolsas": 2,
+                            "valor_bolsas": "1.200,00",
+                            "orcamento_contratado": "3.000,00",
+                            "detalhe_orcamento_contratado": [
+                                {
+                                    "rubrica": "Material de consumo",
+                                    "descricao_categoria": "Material de Consumo",
+                                    "valor": "1.000,00",
+                                },
+                                {
+                                    "rubrica": "Serviços de terceiros",
+                                    "descricao_categoria": (
+                                        "Outros Serviços de Terceiros"
+                                    ),
+                                    "valor": "2.000,00",
+                                },
+                            ],
+                            "tipos_bolsa": [
+                                {
+                                    "tipo_bolsa": "ICT",
+                                    "nome_bolsa": "Iniciacao Cientifica",
+                                    "quantidade": 2,
+                                    "duracao": 2,
+                                    "valor_unitario": "300,00",
+                                    "valor_total": "1.200,00",
+                                }
+                            ],
+                            "bolsistas": [
+                                {
+                                    "bolsista_pesquisador_id": "501",
+                                    "bolsista_pesquisador_nome": "Aluno Bolsista",
+                                    "formulario_bolsa_id": "9001",
+                                    "formulario_bolsa_situacao": "Ativo",
+                                    "formulario_bolsa_inicio": "01/02/2025",
+                                    "formulario_bolsa_termino": "01/02/2026",
+                                    "bolsa_sigla": "ICT",
+                                    "bolsa_nome": "Iniciacao Cientifica",
+                                    "bolsa_nivel_nome": "ICT",
+                                    "bolsa_nivel_valor": "700,00",
+                                    "qtd_bolsas_paga": 2,
+                                    "valor_alocado_total": "1.400,00",
+                                    "pagamentos": 2,
+                                    "valor_pago_total": "1.400,50",
+                                }
+                            ],
+                        }
+                    ],
+                },
+                {
+                    "instituicao_sigla": "IFES - VITÓRIA",
+                    "local": "VITÓRIA",
+                    "total_projetos": 1,
+                    "quantidade_bolsas": 1,
+                    "valor_bolsas": "500,00",
+                    "orcamento_contratado": "300,00",
+                    "projetos": [
+                        {
+                            "arquivo_origem": "edital_1_projetos.json",
+                            "projeto_id": "102",
+                            "projeto_titulo": "Projeto Vitoria",
+                            "coordenador_nome": "Joao Souza",
+                            "situacao_descricao": "Projeto Em Andamento",
+                            "ano": 2024,
+                            "quantidade_bolsas": 1,
+                            "valor_bolsas": "500,00",
+                            "orcamento_contratado": "300,00",
+                            "detalhe_orcamento_contratado": [
+                                {
+                                    "rubrica": ("Equipamentos e material permanente"),
+                                    "descricao_categoria": (
+                                        "Equipamentos e Material Permanente"
+                                    ),
+                                    "valor": "300,00",
+                                }
+                            ],
+                            "tipos_bolsa": [
+                                {
+                                    "tipo_bolsa": "MSC",
+                                    "nome_bolsa": "Mestrado",
+                                    "quantidade": 1,
+                                    "duracao": 1,
+                                    "valor_unitario": "500,00",
+                                    "valor_total": "500,00",
+                                }
+                            ],
+                            "bolsistas": [],
+                        }
+                    ],
+                },
+            ],
+        }
+    ]
+
+
 def test_report_excludes_not_contracted_projects_from_totals(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1014,12 +1227,14 @@ def _project(
     orcamento: list[dict[str, str]],
     valor_bolsa: str = "0",
     situacao_descricao: str = "Projeto aprovado",
+    projeto_data_envio: str = "",
 ) -> dict[str, object]:
     return {
         "projeto_id": projeto_id,
         "projeto_titulo": projeto_titulo,
         "coordenador_nome": coordenador_nome,
         "valor_bolsa": valor_bolsa,
+        "projeto_data_envio": projeto_data_envio,
         "situacao_descricao": situacao_descricao,
         "dados_coordenador": {
             "data": [

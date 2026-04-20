@@ -9,6 +9,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Final, Protocol, TypeAlias, cast
@@ -25,6 +26,10 @@ if _SRC_DIR.exists() and str(_SRC_DIR) not in sys.path:
 
 _DEFAULT_INPUT_DIR: Final = Path("downloads/projetos_por_edital")
 _DEFAULT_OUTPUT: Final = Path("downloads/relatorio_instituicoes.csv")
+_DEFAULT_PROJECTS_BY_LOCATION_OUTPUT: Final = Path(
+    "downloads/projetos_por_instituicao_local.json"
+)
+_DEFAULT_SCHOLARSHIP_ALLOCATIONS_JSON_NAME: Final = "relatorio_alocacao_bolsas.json"
 _DEFAULT_ALLOCATION_MAX_WORKERS: Final = 4
 _DEFAULT_ALLOCATION_RETRIES: Final = 2
 _REPORT_FIELDS: Final = (
@@ -91,6 +96,22 @@ _SCHOLARSHIP_ALLOCATION_FIELDS: Final = (
     "bolsa_sigla",
     "bolsa_nome",
     "bolsa_nivel_id",
+    "bolsa_nivel_nome",
+    "bolsa_nivel_valor",
+    "qtd_bolsas_paga",
+    "valor_alocado_total",
+    "pagamentos",
+    "valor_pago_total",
+)
+_PROJECT_HOLDER_FIELDS: Final = (
+    "bolsista_pesquisador_id",
+    "bolsista_pesquisador_nome",
+    "formulario_bolsa_id",
+    "formulario_bolsa_situacao",
+    "formulario_bolsa_inicio",
+    "formulario_bolsa_termino",
+    "bolsa_sigla",
+    "bolsa_nome",
     "bolsa_nivel_nome",
     "bolsa_nivel_valor",
     "qtd_bolsas_paga",
@@ -369,6 +390,58 @@ def generate_scholarship_allocations_report(
     return [row for index in sorted(rows_by_index) for row in rows_by_index[index]]
 
 
+def generate_projects_by_institution_location(
+    input_dir: str | Path = _DEFAULT_INPUT_DIR,
+    *,
+    scholarship_allocations_path: str | Path | None = None,
+    include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
+) -> list[ReportRow]:
+    """Group projects by institution name and location, with project-level details."""
+
+    allocation_rows = _scholarship_allocations_by_project(
+        _default_scholarship_allocations_path(input_dir)
+        if scholarship_allocations_path is None
+        else scholarship_allocations_path
+    )
+    institutions: dict[str, dict[str, object]] = {}
+    for path in sorted(Path(input_dir).glob("*.json")):
+        for projeto in _projects_from_file(path):
+            if _should_skip_project(
+                projeto,
+                include_excluded_projects,
+                selected_statuses,
+            ):
+                continue
+
+            instituicao_nome, instituicao_sigla = _institution_for_project(projeto)
+            institution = institutions.setdefault(
+                instituicao_nome,
+                _institution_location_total(instituicao_nome),
+            )
+            locations = cast(dict[str, dict[str, object]], institution["locais"])
+            location = locations.setdefault(
+                instituicao_sigla,
+                _location_total(instituicao_sigla),
+            )
+            project_row = _institution_location_project_row(
+                path,
+                projeto,
+                allocation_rows.get(_text(projeto.get("projeto_id")), []),
+            )
+            cast(list[ReportRow], location["projetos"]).append(project_row)
+            _add_project_totals(location, projeto)
+            _add_project_totals(institution, projeto)
+
+    return [
+        _institution_location_output(institution)
+        for institution in sorted(
+            institutions.values(),
+            key=lambda row: _text(row.get("instituicao_nome")).casefold(),
+        )
+    ]
+
+
 def write_report(rows: Sequence[Mapping[str, object]], output: str | Path) -> Path:
     """Write a report as CSV or JSON according to the output file suffix."""
 
@@ -400,6 +473,21 @@ def write_scholarship_allocations_report(
     """Write scholarship allocation rows as CSV or JSON."""
 
     return _write_rows(rows, output, _SCHOLARSHIP_ALLOCATION_FIELDS)
+
+
+def write_projects_by_institution_location_report(
+    rows: Sequence[Mapping[str, object]],
+    output: str | Path,
+) -> Path:
+    """Write the nested institution/location project report as JSON."""
+
+    destination = Path(output)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(
+        f"{json.dumps(list(rows), ensure_ascii=False, indent=2)}\n",
+        encoding="utf-8",
+    )
+    return destination
 
 
 def _write_rows(
@@ -438,6 +526,7 @@ def run(
     researcher_scholarships_summary_output = None
     scholarship_allocations_output = None
     scholarship_allocations_json_output = None
+    projects_by_location_output = None
     if args.researcher_scholarships_output is not None:
         researcher_scholarship_rows = generate_researcher_scholarships_report(
             args.input_dir
@@ -483,6 +572,16 @@ def run(
                 args.scholarship_allocations_json_output,
             )
 
+    if args.projects_by_institution_location_output is not None:
+        projects_by_location_rows = generate_projects_by_institution_location(
+            args.input_dir,
+            scholarship_allocations_path=args.scholarship_allocations_json_path,
+        )
+        projects_by_location_output = write_projects_by_institution_location_report(
+            projects_by_location_rows,
+            args.projects_by_institution_location_output,
+        )
+
     total_projects = sum(_int_quantity(row["total_projetos"]) for row in rows)
     total_scholarships = sum(_int_quantity(row["quantidade_bolsas"]) for row in rows)
     total_scholarship_amount = sum(
@@ -509,6 +608,11 @@ def run(
         print(f"Alocacao de bolsas gerada: {scholarship_allocations_output}")
     if scholarship_allocations_json_output is not None:
         print(f"Alocacao de bolsas JSON gerada: {scholarship_allocations_json_output}")
+    if projects_by_location_output is not None:
+        print(
+            "Projetos por instituicao e local gerados: "
+            f"{projects_by_location_output}"
+        )
     print(f"Instituicoes: {len(rows)}")
     print(f"Projetos: {total_projects}")
     print(f"Bolsas: {total_scholarships}")
@@ -600,6 +704,25 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help=(
             "Limita a quantidade de projetos consultados no endpoint bolsistas. "
             "Use para validacoes rapidas; omitido consulta todos."
+        ),
+    )
+    parser.add_argument(
+        "--scholarship-allocations-json-path",
+        type=Path,
+        default=None,
+        help=(
+            "Arquivo JSON de alocacoes de bolsistas ja gerado. "
+            "Quando omitido, usa relatorio_alocacao_bolsas.json ao lado do input-dir."
+        ),
+    )
+    parser.add_argument(
+        "--projects-by-institution-location-output",
+        type=Path,
+        default=None,
+        help=(
+            "Arquivo JSON para agrupar projetos por instituicao e local, "
+            "incluindo orcamento, tipos de bolsa e bolsistas. "
+            f"Sugestao: {_DEFAULT_PROJECTS_BY_LOCATION_OUTPUT}"
         ),
     )
     return parser.parse_args(argv)
@@ -728,6 +851,256 @@ def _records_from_allocation_envelope(
     envelope: ScholarshipAllocationEnvelope,
 ) -> list[Mapping[str, object]]:
     return [item for item in envelope.data if isinstance(item, Mapping)]
+
+
+def _default_scholarship_allocations_path(input_dir: str | Path) -> Path:
+    return Path(input_dir).parent / _DEFAULT_SCHOLARSHIP_ALLOCATIONS_JSON_NAME
+
+
+def _scholarship_allocations_by_project(
+    path: str | Path,
+) -> dict[str, list[Mapping[str, object]]]:
+    allocation_path = Path(path)
+    if not allocation_path.exists():
+        return {}
+
+    try:
+        payload = json.loads(allocation_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+    if not isinstance(payload, list):
+        return {}
+
+    rows_by_project: dict[str, list[Mapping[str, object]]] = {}
+    for item in payload:
+        if not isinstance(item, Mapping):
+            continue
+        project_id = _text(item.get("projeto_id"))
+        if not project_id:
+            continue
+        rows_by_project.setdefault(project_id, []).append(item)
+
+    return rows_by_project
+
+
+def _institution_location_total(institution_name: str) -> dict[str, object]:
+    return {
+        "instituicao_nome": institution_name,
+        "total_projetos": 0,
+        "quantidade_bolsas": 0,
+        "valor_bolsas": Decimal("0"),
+        "orcamento_contratado": Decimal("0"),
+        "locais": {},
+    }
+
+
+def _location_total(institution_acronym: str) -> dict[str, object]:
+    return {
+        "instituicao_sigla": institution_acronym,
+        "local": _location_from_institution_acronym(institution_acronym),
+        "total_projetos": 0,
+        "quantidade_bolsas": 0,
+        "valor_bolsas": Decimal("0"),
+        "orcamento_contratado": Decimal("0"),
+        "projetos": [],
+    }
+
+
+def _add_project_totals(
+    total: dict[str, object], projeto: Mapping[str, object]
+) -> None:
+    total["total_projetos"] = _int_quantity(total["total_projetos"]) + 1
+    total["quantidade_bolsas"] = _int_quantity(
+        total["quantidade_bolsas"]
+    ) + _scholarship_quantity(projeto)
+    total["valor_bolsas"] = _decimal(total["valor_bolsas"]) + _scholarship_amount(
+        projeto
+    )
+    total["orcamento_contratado"] = _decimal(
+        total["orcamento_contratado"]
+    ) + _contracted_budget(projeto)
+
+
+def _institution_location_output(institution: Mapping[str, object]) -> ReportRow:
+    locations = cast(Mapping[str, Mapping[str, object]], institution["locais"])
+    location_rows = [
+        _location_output(location)
+        for location in sorted(
+            locations.values(),
+            key=lambda row: _text(row.get("instituicao_sigla")).casefold(),
+        )
+    ]
+    return {
+        "instituicao_nome": institution.get("instituicao_nome", ""),
+        "total_locais": len(location_rows),
+        "total_projetos": _int_quantity(institution.get("total_projetos")),
+        "quantidade_bolsas": _int_quantity(institution.get("quantidade_bolsas")),
+        "valor_bolsas": _money(_decimal(institution.get("valor_bolsas"))),
+        "orcamento_contratado": _money(
+            _decimal(institution.get("orcamento_contratado"))
+        ),
+        "locais": location_rows,
+    }
+
+
+def _location_output(location: Mapping[str, object]) -> ReportRow:
+    projects = cast(Sequence[Mapping[str, object]], location.get("projetos", []))
+    return {
+        "instituicao_sigla": location.get("instituicao_sigla", ""),
+        "local": location.get("local", ""),
+        "total_projetos": _int_quantity(location.get("total_projetos")),
+        "quantidade_bolsas": _int_quantity(location.get("quantidade_bolsas")),
+        "valor_bolsas": _money(_decimal(location.get("valor_bolsas"))),
+        "orcamento_contratado": _money(_decimal(location.get("orcamento_contratado"))),
+        "projetos": sorted(
+            (dict(project) for project in projects),
+            key=lambda row: (
+                _project_year_sort_value(row),
+                _text(row.get("projeto_id")),
+            ),
+        ),
+    }
+
+
+def _institution_location_project_row(
+    path: Path,
+    projeto: Mapping[str, object],
+    allocations: Sequence[Mapping[str, object]],
+) -> ReportRow:
+    return {
+        "arquivo_origem": path.name,
+        "projeto_id": _text(projeto.get("projeto_id")),
+        "projeto_titulo": _text(projeto.get("projeto_titulo")),
+        "coordenador_nome": _text(projeto.get("coordenador_nome")),
+        "situacao_descricao": _text(projeto.get("situacao_descricao")),
+        "ano": _project_year(projeto),
+        "quantidade_bolsas": _scholarship_quantity(projeto),
+        "valor_bolsas": _money(_scholarship_amount(projeto)),
+        "orcamento_contratado": _money(_contracted_budget(projeto)),
+        "detalhe_orcamento_contratado": _project_budget_details(projeto),
+        "tipos_bolsa": _project_scholarship_types(projeto),
+        "bolsistas": _project_holders(allocations),
+    }
+
+
+def _project_budget_details(projeto: Mapping[str, object]) -> list[ReportRow]:
+    return [
+        {
+            "rubrica": _budget_rubric(item.get("descricao_categoria")),
+            "descricao_categoria": _text(item.get("descricao_categoria"))
+            or _UNKNOWN_INSTITUTION,
+            "valor": _money(_decimal(item.get("valor_categoria"))),
+        }
+        for item in _envelope_records(projeto.get("orcamento_contratado"))
+    ]
+
+
+def _project_scholarship_types(projeto: Mapping[str, object]) -> list[ReportRow]:
+    rows: list[ReportRow] = []
+    for item in _envelope_records(projeto.get("quadroBolsas")):
+        quantity = _scholarship_item_quantity(item)
+        duration = _scholarship_item_duration(item)
+        total_amount = _scholarship_item_amount(item)
+        unit_amount = _scholarship_item_unit_amount(
+            item,
+            total_amount,
+            quantity,
+            duration,
+        )
+        rows.append(
+            {
+                "tipo_bolsa": _scholarship_item_acronym(item),
+                "nome_bolsa": _scholarship_item_name(item),
+                "quantidade": quantity,
+                "duracao": duration,
+                "valor_unitario": _money(unit_amount),
+                "valor_total": _money(total_amount),
+            }
+        )
+
+    return rows
+
+
+def _project_holders(allocations: Sequence[Mapping[str, object]]) -> list[ReportRow]:
+    return [
+        {
+            field: (
+                _int_quantity(row.get(field))
+                if field in {"qtd_bolsas_paga", "pagamentos"}
+                else row.get(field, "")
+            )
+            for field in _PROJECT_HOLDER_FIELDS
+        }
+        for row in allocations
+    ]
+
+
+def _location_from_institution_acronym(value: object) -> str:
+    acronym = _text(value)
+    if not acronym:
+        return _UNKNOWN_INSTITUTION
+    if "-" not in acronym:
+        return acronym
+
+    location = acronym.rsplit("-", 1)[-1].strip()
+    return location or acronym
+
+
+def _budget_rubric(value: object) -> str:
+    description = _text(value).casefold()
+    if not description:
+        return "Outros"
+    if "bolsa" in description:
+        return "Bolsas"
+    if "material de consumo" in description:
+        return "Material de consumo"
+    if "equipamento" in description or "permanente" in description:
+        return "Equipamentos e material permanente"
+    if any(
+        pattern in description
+        for pattern in ("diária", "diaria", "passagem", "passagen", "hospedagem")
+    ):
+        return "Viagem"
+    if (
+        "serviço" in description
+        or "servico" in description
+        or "pessoa jurídica" in description
+    ):
+        return "Serviços de terceiros"
+    if "pessoal" in description or "encargo" in description:
+        return "Pessoal e encargos"
+
+    return "Outros"
+
+
+def _project_year(projeto: Mapping[str, object]) -> int | str:
+    for field_name in ("projeto_data_envio", "projeto_data_inicio_previsto"):
+        year = _year_from_date_text(projeto.get(field_name))
+        if year != "":
+            return year
+
+    return ""
+
+
+def _year_from_date_text(value: object) -> int | str:
+    raw_value = _text(value)
+    if not raw_value:
+        return ""
+
+    date_part = raw_value.split()[0]
+    for date_format in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(date_part, date_format).year
+        except ValueError:
+            continue
+
+    return ""
+
+
+def _project_year_sort_value(row: Mapping[str, object]) -> int:
+    year = row.get("ano")
+    return year if isinstance(year, int) else 0
 
 
 def _scholarship_allocation_row(

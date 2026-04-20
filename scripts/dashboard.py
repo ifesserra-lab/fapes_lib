@@ -28,6 +28,7 @@ from scripts.report import (
 from scripts.report import (
     excluded_project_status_labels,
     generate_excluded_projects_audit,
+    generate_projects_by_institution_location,
     generate_report,
     generate_researcher_scholarships_report,
     load_project_status_options,
@@ -42,6 +43,7 @@ ReportRow: TypeAlias = dict[str, object]
 
 _DEFAULT_INPUT_DIR: Final = Path("downloads/projetos_por_edital")
 _DEFAULT_SCHOLARSHIP_ALLOCATIONS_JSON_NAME: Final = "relatorio_alocacao_bolsas.json"
+_DEFAULT_PROJECTS_BY_LOCATION_JSON_NAME: Final = "projetos_por_instituicao_local.json"
 _DEFAULT_TOP_N: Final = 15
 _BUDGET_CATEGORY_COLUMN = "categoria_orcamento"
 _BUDGET_COLUMN = "orcamento_contratado"
@@ -73,6 +75,7 @@ _TABLE_MONEY_COLUMNS: Final = frozenset(
         "Valor pago",
         "Valor total",
         "Valor unitario",
+        "Valor",
         "Total financeiro",
         "Volume financeiro",
         "valor_total",
@@ -314,6 +317,7 @@ def run_app() -> None:
             options=(
                 "Resumo",
                 "Detalhes da instituicao",
+                "Instituicoes por local",
                 "Projetos por pesquisador",
                 "Bolsistas alocados",
             ),
@@ -329,6 +333,12 @@ def run_app() -> None:
             st.text_input(
                 "JSON de bolsistas",
                 value=str(_default_scholarship_allocations_path(input_dir)),
+            )
+        )
+        projects_by_location_path = Path(
+            st.text_input(
+                "JSON instituicao/local",
+                value=str(_default_projects_by_location_path(input_dir)),
             )
         )
         show_chart_values = bool(
@@ -372,6 +382,22 @@ def run_app() -> None:
             data.institution_rows,
             include_excluded_projects=include_excluded_projects,
             selected_statuses=selected_project_statuses,
+            show_chart_values=show_chart_values,
+        )
+        return
+
+    if page_label == "Instituicoes por local":
+        _render_institution_location_page(
+            st,
+            pd,
+            alt,
+            _load_institution_location_rows(
+                data.input_dir,
+                projects_by_location_path=projects_by_location_path,
+                scholarship_allocations_path=scholarship_allocations_path,
+                include_excluded_projects=include_excluded_projects,
+                selected_statuses=selected_project_statuses,
+            ),
             show_chart_values=show_chart_values,
         )
         return
@@ -1164,6 +1190,140 @@ def _render_researcher_page(
     )
 
 
+def _render_institution_location_page(
+    st: Any,
+    pd: Any,
+    alt: Any,
+    rows: Sequence[Mapping[str, object]],
+    *,
+    show_chart_values: bool,
+) -> None:
+    st.header("Instituicoes por local")
+    if not rows:
+        st.warning("Nenhum dado de instituicao/local encontrado.")
+        return
+
+    summary_rows = _institution_location_summary_rows(rows)
+    location_labels = _institution_location_labels(summary_rows)
+    with st.sidebar:
+        st.header("Filtros de instituicao/local")
+        selected_locations = st.multiselect(
+            "Instituicao e local",
+            options=location_labels,
+            placeholder="Selecione uma ou mais instituicoes/locais",
+        )
+        location_query = st.text_input("Buscar instituicao, local ou projeto")
+
+    filtered_summary_rows = _filter_institution_location_table_rows(
+        summary_rows,
+        selected_locations=selected_locations,
+        query=location_query,
+    )
+    if not filtered_summary_rows:
+        st.warning("Nenhum local encontrado para os filtros selecionados.")
+        return
+
+    selected_location_set = {
+        _institution_location_table_label(row) for row in filtered_summary_rows
+    }
+    selected_location_labels = list(selected_location_set)
+    project_rows = _institution_location_project_rows(
+        rows,
+        selected_locations=selected_location_labels,
+        query=location_query,
+    )
+    budget_rows = _institution_location_budget_rows(
+        rows,
+        selected_locations=selected_location_labels,
+        query=location_query,
+    )
+    scholarship_rows = _institution_location_scholarship_rows(
+        rows,
+        selected_locations=selected_location_labels,
+        query=location_query,
+    )
+    holder_rows = _institution_location_holder_rows(
+        rows,
+        selected_locations=selected_location_labels,
+        query=location_query,
+    )
+
+    metric_columns = st.columns(6)
+    metric_columns[0].metric(
+        "Instituicoes",
+        len({row["Instituicao"] for row in filtered_summary_rows}),
+    )
+    metric_columns[1].metric("Locais", len(filtered_summary_rows))
+    metric_columns[2].metric("Projetos", len(project_rows))
+    metric_columns[3].metric(
+        "Bolsas",
+        sum(_int_value(row.get("Bolsas")) for row in filtered_summary_rows),
+    )
+    metric_columns[4].metric(
+        "Valor bolsas",
+        _currency_label(
+            sum(
+                (_decimal(row.get("Valor bolsas")) for row in filtered_summary_rows),
+                Decimal("0"),
+            )
+        ),
+    )
+    metric_columns[5].metric(
+        "Orcamento",
+        _currency_label(
+            sum(
+                (
+                    _decimal(row.get("Orcamento contratado"))
+                    for row in filtered_summary_rows
+                ),
+                Decimal("0"),
+            )
+        ),
+    )
+
+    chart_rows = _institution_location_chart_rows(filtered_summary_rows)
+    left, right = st.columns(2)
+    with left:
+        st.subheader("Orcamento por local")
+        _bar_chart_with_total_labels(
+            st,
+            alt,
+            _chart_dataframe(pd, chart_rows, _BUDGET_VALUE_COLUMN),
+            x="local_label",
+            y=_BUDGET_VALUE_COLUMN,
+            color="#28666E",
+            show_values=show_chart_values,
+        )
+    with right:
+        st.subheader("Projetos por local")
+        _bar_chart_with_total_labels(
+            st,
+            alt,
+            _chart_dataframe(pd, chart_rows, _PROJECTS_COLUMN),
+            x="local_label",
+            y=_PROJECTS_COLUMN,
+            color="#7C9885",
+            show_values=show_chart_values,
+        )
+
+    tab_locations, tab_projects, tab_budget, tab_scholarships, tab_holders = st.tabs(
+        ["Locais", "Projetos", "Orcamento", "Bolsas", "Bolsistas"]
+    )
+    with tab_locations:
+        _render_sortable_dataframe(st, pd.DataFrame(filtered_summary_rows))
+    with tab_projects:
+        _render_sortable_dataframe(st, pd.DataFrame(project_rows))
+    with tab_budget:
+        _render_sortable_dataframe(st, pd.DataFrame(budget_rows))
+    with tab_scholarships:
+        _render_sortable_dataframe(st, pd.DataFrame(scholarship_rows))
+    with tab_holders:
+        if holder_rows:
+            _render_sortable_dataframe(st, pd.DataFrame(holder_rows))
+        else:
+            st.info("Nenhum bolsista encontrado para os filtros selecionados.")
+
+
 def _render_scholarship_allocations_page(
     st: Any,
     pd: Any,
@@ -1511,6 +1671,35 @@ def _researcher_scholarship_type_label(row: Mapping[str, object]) -> str:
 
 def _default_scholarship_allocations_path(input_dir: str | Path) -> Path:
     return Path(input_dir).parent / _DEFAULT_SCHOLARSHIP_ALLOCATIONS_JSON_NAME
+
+
+def _default_projects_by_location_path(input_dir: str | Path) -> Path:
+    return Path(input_dir).parent / _DEFAULT_PROJECTS_BY_LOCATION_JSON_NAME
+
+
+def _load_institution_location_rows(
+    input_dir: str | Path,
+    *,
+    projects_by_location_path: str | Path,
+    scholarship_allocations_path: str | Path,
+    include_excluded_projects: bool,
+    selected_statuses: Sequence[str],
+) -> list[ReportRow]:
+    path = Path(projects_by_location_path)
+    if path.exists():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            payload = None
+        if isinstance(payload, list):
+            return [dict(item) for item in payload if isinstance(item, Mapping)]
+
+    return generate_projects_by_institution_location(
+        input_dir,
+        scholarship_allocations_path=scholarship_allocations_path,
+        include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
+    )
 
 
 def _should_skip_scholarship_allocation_row(
@@ -1981,6 +2170,309 @@ def _researcher_scholarship_allocation_rows(
         for row in rows
         if str(row.get("projeto_id") or "").strip() in project_ids
     ]
+
+
+def _institution_location_summary_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    summary_rows: list[ReportRow] = []
+    for institution in rows:
+        institution_name = str(institution.get("instituicao_nome", "")).strip()
+        for location in _nested_mapping_rows(institution.get("locais")):
+            summary_rows.append(
+                {
+                    "Instituicao": institution_name,
+                    "Sigla": location.get("instituicao_sigla", ""),
+                    "Local": location.get("local", ""),
+                    "Projetos": _int_value(location.get("total_projetos")),
+                    "Bolsas": _int_value(location.get("quantidade_bolsas")),
+                    "Valor bolsas": _currency_label(location.get("valor_bolsas")),
+                    "Orcamento contratado": _currency_label(
+                        location.get("orcamento_contratado")
+                    ),
+                }
+            )
+
+    return sorted(
+        summary_rows,
+        key=lambda row: (
+            str(row.get("Instituicao", "")).casefold(),
+            str(row.get("Sigla", "")).casefold(),
+        ),
+    )
+
+
+def _institution_location_project_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_locations: Sequence[str] = (),
+    query: str = "",
+) -> list[ReportRow]:
+    project_rows: list[ReportRow] = []
+    for institution, location, project in _institution_location_projects(rows):
+        if not _institution_location_context_matches(
+            institution,
+            location,
+            project,
+            selected_locations=selected_locations,
+            query=query,
+        ):
+            continue
+        project_rows.append(
+            {
+                "Instituicao": institution.get("instituicao_nome", ""),
+                "Sigla": location.get("instituicao_sigla", ""),
+                "Local": location.get("local", ""),
+                "Projeto ID": project.get("projeto_id", ""),
+                "Projeto": project.get("projeto_titulo", ""),
+                "Responsavel": project.get("coordenador_nome", ""),
+                "Ano": project.get("ano", ""),
+                "Bolsas": _int_value(project.get("quantidade_bolsas")),
+                "Valor bolsas": _currency_label(project.get("valor_bolsas")),
+                "Orcamento contratado": _currency_label(
+                    project.get("orcamento_contratado")
+                ),
+            }
+        )
+
+    return project_rows
+
+
+def _institution_location_budget_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_locations: Sequence[str] = (),
+    query: str = "",
+) -> list[ReportRow]:
+    budget_rows: list[ReportRow] = []
+    for institution, location, project in _institution_location_projects(rows):
+        if not _institution_location_context_matches(
+            institution,
+            location,
+            project,
+            selected_locations=selected_locations,
+            query=query,
+        ):
+            continue
+        for item in _nested_mapping_rows(project.get("detalhe_orcamento_contratado")):
+            budget_rows.append(
+                {
+                    "Instituicao": institution.get("instituicao_nome", ""),
+                    "Sigla": location.get("instituicao_sigla", ""),
+                    "Local": location.get("local", ""),
+                    "Projeto ID": project.get("projeto_id", ""),
+                    "Projeto": project.get("projeto_titulo", ""),
+                    "Rubrica": item.get("rubrica", ""),
+                    "Descricao": item.get("descricao_categoria", ""),
+                    "Valor": _currency_label(item.get("valor")),
+                }
+            )
+
+    return budget_rows
+
+
+def _institution_location_scholarship_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_locations: Sequence[str] = (),
+    query: str = "",
+) -> list[ReportRow]:
+    scholarship_rows: list[ReportRow] = []
+    for institution, location, project in _institution_location_projects(rows):
+        if not _institution_location_context_matches(
+            institution,
+            location,
+            project,
+            selected_locations=selected_locations,
+            query=query,
+        ):
+            continue
+        for item in _nested_mapping_rows(project.get("tipos_bolsa")):
+            scholarship_rows.append(
+                {
+                    "Instituicao": institution.get("instituicao_nome", ""),
+                    "Sigla": location.get("instituicao_sigla", ""),
+                    "Local": location.get("local", ""),
+                    "Projeto ID": project.get("projeto_id", ""),
+                    "Projeto": project.get("projeto_titulo", ""),
+                    "Tipo bolsa": item.get("tipo_bolsa", ""),
+                    "Nome da bolsa": item.get("nome_bolsa", ""),
+                    "Quantidade": _int_value(item.get("quantidade")),
+                    "Duracao": _int_value(item.get("duracao")),
+                    "Valor unitario": _currency_label(item.get("valor_unitario")),
+                    "Valor total": _currency_label(item.get("valor_total")),
+                }
+            )
+
+    return scholarship_rows
+
+
+def _institution_location_holder_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_locations: Sequence[str] = (),
+    query: str = "",
+) -> list[ReportRow]:
+    holder_rows: list[ReportRow] = []
+    for institution, location, project in _institution_location_projects(rows):
+        if not _institution_location_context_matches(
+            institution,
+            location,
+            project,
+            selected_locations=selected_locations,
+            query=query,
+        ):
+            continue
+        for holder in _nested_mapping_rows(project.get("bolsistas")):
+            holder_rows.append(
+                {
+                    "Instituicao": institution.get("instituicao_nome", ""),
+                    "Sigla": location.get("instituicao_sigla", ""),
+                    "Local": location.get("local", ""),
+                    "Projeto ID": project.get("projeto_id", ""),
+                    "Projeto": project.get("projeto_titulo", ""),
+                    "Bolsista": holder.get("bolsista_pesquisador_nome", ""),
+                    "Tipo bolsa": _institution_location_holder_type_label(holder),
+                    "Bolsas pagas": _int_value(holder.get("qtd_bolsas_paga")),
+                    "Valor alocado": _currency_label(holder.get("valor_alocado_total")),
+                    "Valor pago": _currency_label(holder.get("valor_pago_total")),
+                }
+            )
+
+    return holder_rows
+
+
+def _institution_location_labels(rows: Sequence[Mapping[str, object]]) -> list[str]:
+    labels = {_institution_location_table_label(row) for row in rows}
+    return sorted((label for label in labels if label), key=str.casefold)
+
+
+def _filter_institution_location_table_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_locations: Sequence[str] = (),
+    query: str = "",
+) -> list[ReportRow]:
+    selected_location_set = set(selected_locations)
+    return [
+        dict(row)
+        for row in rows
+        if (
+            not selected_location_set
+            or _institution_location_table_label(row) in selected_location_set
+        )
+        and _institution_location_matches_query(
+            (
+                row.get("Instituicao"),
+                row.get("Sigla"),
+                row.get("Local"),
+            ),
+            query,
+        )
+    ]
+
+
+def _institution_location_chart_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    chart_rows: list[ReportRow] = []
+    for row in rows:
+        chart_rows.append(
+            {
+                "local_label": (
+                    f"{row.get('Local', '')} | {row.get('Sigla', '')}".strip()
+                ),
+                _PROJECTS_COLUMN: _int_value(row.get("Projetos")),
+                _SCHOLARSHIPS_COLUMN: _int_value(row.get("Bolsas")),
+                _SCHOLARSHIP_AMOUNT_COLUMN: row.get("Valor bolsas", ""),
+                _BUDGET_COLUMN: row.get("Orcamento contratado", ""),
+                _BUDGET_VALUE_COLUMN: float(_decimal(row.get("Orcamento contratado"))),
+            }
+        )
+
+    return chart_rows
+
+
+def _institution_location_projects(
+    rows: Sequence[Mapping[str, object]],
+) -> list[tuple[Mapping[str, object], Mapping[str, object], Mapping[str, object]]]:
+    projects: list[
+        tuple[Mapping[str, object], Mapping[str, object], Mapping[str, object]]
+    ] = []
+    for institution in rows:
+        for location in _nested_mapping_rows(institution.get("locais")):
+            for project in _nested_mapping_rows(location.get("projetos")):
+                projects.append((institution, location, project))
+
+    return projects
+
+
+def _institution_location_context_matches(
+    institution: Mapping[str, object],
+    location: Mapping[str, object],
+    project: Mapping[str, object],
+    *,
+    selected_locations: Sequence[str],
+    query: str,
+) -> bool:
+    if selected_locations and _institution_location_label_from_parts(
+        institution.get("instituicao_nome"),
+        location.get("instituicao_sigla"),
+    ) not in set(selected_locations):
+        return False
+
+    return _institution_location_matches_query(
+        (
+            institution.get("instituicao_nome"),
+            location.get("instituicao_sigla"),
+            location.get("local"),
+            project.get("projeto_id"),
+            project.get("projeto_titulo"),
+            project.get("coordenador_nome"),
+        ),
+        query,
+    )
+
+
+def _institution_location_table_label(row: Mapping[str, object]) -> str:
+    return _institution_location_label_from_parts(
+        row.get("Instituicao"),
+        row.get("Sigla"),
+    )
+
+
+def _institution_location_label_from_parts(name: object, acronym: object) -> str:
+    institution_name = str(name or "").strip()
+    institution_acronym = str(acronym or "").strip()
+    if institution_name and institution_acronym:
+        return f"{institution_name} | {institution_acronym}"
+    return institution_name or institution_acronym
+
+
+def _institution_location_matches_query(
+    values: Sequence[object],
+    query: str,
+) -> bool:
+    normalized_query = _normalized_search_text(query)
+    if not normalized_query:
+        return True
+
+    return any(normalized_query in _normalized_search_text(value) for value in values)
+
+
+def _institution_location_holder_type_label(row: Mapping[str, object]) -> str:
+    acronym = str(row.get("bolsa_sigla", "")).strip()
+    name = str(row.get("bolsa_nome", "")).strip()
+    if acronym and name and acronym != name:
+        return f"{acronym} | {name}"
+    return acronym or name
+
+
+def _nested_mapping_rows(value: object) -> list[Mapping[str, object]]:
+    if not isinstance(value, list):
+        return []
+
+    return [item for item in value if isinstance(item, Mapping)]
 
 
 def _active_project_rows(
