@@ -13,11 +13,11 @@ from scripts.report import (
     _contracted_budget,
     _decimal,
     _institution_for_project,
-    _is_not_contracted_project,
     _money,
     _projects_from_file,
     _scholarship_amount,
     _scholarship_quantity,
+    _should_skip_project,
 )
 
 ProjectDetailRow: TypeAlias = dict[str, object]
@@ -90,13 +90,18 @@ def load_project_details(
     institution_label: str,
     *,
     include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
 ) -> list[ProjectDetailRow]:
     """Load project details for an institution name/acronym label."""
 
     details: list[ProjectDetail] = []
     for path in sorted(Path(input_dir).glob("*.json")):
         for projeto in _projects_from_file(path):
-            if _should_skip_project(projeto, include_excluded_projects):
+            if _should_skip_project(
+                projeto,
+                include_excluded_projects,
+                selected_statuses,
+            ):
                 continue
             if _label_for_project(projeto) != institution_label:
                 continue
@@ -110,6 +115,7 @@ def load_researcher_project_details(
     researcher_query: str,
     *,
     include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
 ) -> list[ProjectDetailRow]:
     """Load project details matching a researcher/coordinator name query."""
 
@@ -120,7 +126,11 @@ def load_researcher_project_details(
     rows: list[ProjectDetailRow] = []
     for path in sorted(Path(input_dir).glob("*.json")):
         for projeto in _projects_from_file(path):
-            if _should_skip_project(projeto, include_excluded_projects):
+            if _should_skip_project(
+                projeto,
+                include_excluded_projects,
+                selected_statuses,
+            ):
                 continue
             if (
                 normalized_query
@@ -172,13 +182,6 @@ def _project_detail(projeto: Mapping[str, object]) -> ProjectDetail:
         valor_bolsas=_scholarship_amount(projeto),
         orcamento_contratado=_contracted_budget(projeto),
     )
-
-
-def _should_skip_project(
-    projeto: Mapping[str, object],
-    include_excluded_projects: bool,
-) -> bool:
-    return not include_excluded_projects and _is_not_contracted_project(projeto)
 
 
 def _project_detail_sort_key(detail: ProjectDetail) -> tuple[int, str]:

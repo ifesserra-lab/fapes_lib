@@ -205,6 +205,51 @@ def test_project_details_exclude_not_contracted_projects(
     assert [row["projeto_id"] for row in all_rows] == ["101", "102", "103"]
 
 
+def test_project_details_filter_projects_by_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    project_details = cast(Any, importlib.import_module("scripts.project_details"))
+    input_dir = tmp_path / "projetos_por_edital"
+    input_dir.mkdir()
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                projeto_id="101",
+                projeto_titulo="Projeto em andamento",
+                projeto_data_envio="24/07/2015",
+                projeto_data_inicio_previsto="01/08/2015",
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[{"orcamento_quantidade": "2"}],
+                orcamento=[{"valor_categoria": "1000"}],
+                situacao_descricao="Projeto Em Andamento",
+            ),
+            _project(
+                projeto_id="102",
+                projeto_titulo="Projeto concluido",
+                projeto_data_envio="24/07/2015",
+                projeto_data_inicio_previsto="01/08/2015",
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[{"orcamento_quantidade": "5"}],
+                orcamento=[{"valor_categoria": "500"}],
+                situacao_descricao="Projeto Concluído e homologado",
+            ),
+        ],
+    )
+
+    rows = project_details.load_project_details(
+        input_dir,
+        "Universidade Federal do Espirito Santo | UFES - VITÓRIA",
+        selected_statuses=["Projeto Em Andamento"],
+    )
+
+    assert [row["projeto_id"] for row in rows] == ["101"]
+
+
 def test_project_details_loads_projects_for_researcher_query(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

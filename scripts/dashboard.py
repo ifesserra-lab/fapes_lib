@@ -22,6 +22,9 @@ from scripts.report import (
     excluded_project_status_labels,
     generate_excluded_projects_audit,
     generate_report,
+    generate_researcher_scholarships_report,
+    load_project_status_options,
+    summarize_researcher_scholarships,
 )
 from scripts.scholarship_details import load_scholarship_details
 
@@ -60,6 +63,8 @@ class DashboardData:
     institution_rows: list[ReportRow]
     excluded_project_count: int
     excluded_project_rows: list[ReportRow]
+    researcher_scholarship_rows: list[ReportRow]
+    researcher_scholarship_summary_rows: list[ReportRow]
     total_institutions: int
     total_projects: int
     total_scholarships: int
@@ -80,6 +85,7 @@ def load_dashboard_data(
     input_dir: str | Path = _DEFAULT_INPUT_DIR,
     *,
     include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
 ) -> DashboardData:
     """Load aggregated dashboard data from downloaded edital project JSON files."""
 
@@ -88,11 +94,23 @@ def load_dashboard_data(
         generate_report(
             path,
             include_excluded_projects=include_excluded_projects,
+            selected_statuses=selected_statuses,
         ),
         _BUDGET_COLUMN,
         limit=None,
     )
-    excluded_project_rows = generate_excluded_projects_audit(path)
+    excluded_project_rows = generate_excluded_projects_audit(
+        path,
+        selected_statuses=selected_statuses,
+    )
+    researcher_scholarship_rows = generate_researcher_scholarships_report(
+        path,
+        include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
+    )
+    researcher_scholarship_summary_rows = summarize_researcher_scholarships(
+        researcher_scholarship_rows
+    )
     totals = _summary_totals(rows)
 
     return DashboardData(
@@ -101,6 +119,8 @@ def load_dashboard_data(
         institution_rows=rows,
         excluded_project_count=len(excluded_project_rows),
         excluded_project_rows=excluded_project_rows,
+        researcher_scholarship_rows=researcher_scholarship_rows,
+        researcher_scholarship_summary_rows=researcher_scholarship_summary_rows,
         total_institutions=totals.total_institutions,
         total_projects=totals.total_projects,
         total_scholarships=totals.total_scholarships,
@@ -205,9 +225,20 @@ def run_app() -> None:
         )
 
     include_excluded_projects = str(project_scope_label) == "Todos os projetos"
+    with st.sidebar:
+        selected_project_statuses = st.multiselect(
+            "Status do projeto",
+            options=load_project_status_options(
+                input_dir,
+                include_excluded_projects=include_excluded_projects,
+            ),
+            key="global_project_statuses",
+        )
+
     data = load_dashboard_data(
         input_dir,
         include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_project_statuses,
     )
     if not data.institution_rows:
         st.warning(f"Nenhum JSON encontrado em {data.input_dir}.")
@@ -221,6 +252,7 @@ def run_app() -> None:
             data.input_dir,
             data.institution_rows,
             include_excluded_projects=include_excluded_projects,
+            selected_statuses=selected_project_statuses,
             show_chart_values=show_chart_values,
         )
         return
@@ -232,6 +264,7 @@ def run_app() -> None:
             alt,
             data.input_dir,
             include_excluded_projects=include_excluded_projects,
+            selected_statuses=selected_project_statuses,
             show_chart_values=show_chart_values,
         )
         return
@@ -242,6 +275,7 @@ def run_app() -> None:
         alt,
         data,
         include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_project_statuses,
         show_chart_values=show_chart_values,
     )
 
@@ -253,6 +287,7 @@ def _render_summary_page(
     data: DashboardData,
     *,
     include_excluded_projects: bool,
+    selected_statuses: Sequence[str],
     show_chart_values: bool,
 ) -> None:
     with st.sidebar:
@@ -303,6 +338,7 @@ def _render_summary_page(
         data.input_dir,
         budget_category_labels,
         include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
     )
 
     metric_columns = st.columns(7)
@@ -321,7 +357,9 @@ def _render_summary_page(
     table_frame = _display_dataframe(pd, filtered_rows)
     audit_frame = pd.DataFrame(data.excluded_project_rows)
 
-    tab_overview, tab_table, tab_audit = st.tabs(["Visao geral", "Tabela", "Auditoria"])
+    tab_overview, tab_table, tab_researchers, tab_audit = st.tabs(
+        ["Visao geral", "Tabela", "Pesquisadores e bolsas", "Auditoria"]
+    )
     with tab_overview:
         left, right = st.columns(2)
         with left:
@@ -398,6 +436,40 @@ def _render_summary_page(
             mime="text/csv",
         )
 
+    with tab_researchers:
+        researcher_summary_frame = pd.DataFrame(
+            data.researcher_scholarship_summary_rows
+        )
+        researcher_scholarship_frame = pd.DataFrame(data.researcher_scholarship_rows)
+        if researcher_summary_frame.empty:
+            st.info("Nenhuma bolsa encontrada para os filtros selecionados.")
+        else:
+            st.subheader("Resumo por pesquisador")
+            st.dataframe(
+                researcher_summary_frame,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+        summary_csv_payload = researcher_summary_frame.to_csv(index=False).encode(
+            "utf-8"
+        )
+        st.download_button(
+            "Baixar resumo por pesquisador",
+            data=summary_csv_payload,
+            file_name="relatorio_pesquisadores_bolsas_resumo.csv",
+            mime="text/csv",
+        )
+        scholarship_csv_payload = researcher_scholarship_frame.to_csv(
+            index=False
+        ).encode("utf-8")
+        st.download_button(
+            "Baixar pesquisadores e bolsas",
+            data=scholarship_csv_payload,
+            file_name="relatorio_pesquisadores_bolsas.csv",
+            mime="text/csv",
+        )
+
     with tab_audit:
         if audit_frame.empty:
             st.info("Nenhum projeto encontrado pela regra de exclusao.")
@@ -420,6 +492,7 @@ def _render_institution_detail_page(
     institution_rows: Sequence[Mapping[str, object]],
     *,
     include_excluded_projects: bool,
+    selected_statuses: Sequence[str],
     show_chart_values: bool,
 ) -> None:
     with st.sidebar:
@@ -448,6 +521,7 @@ def _render_institution_detail_page(
         input_dir,
         str(institution_label),
         include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
     )
 
     st.header(str(institution_label))
@@ -458,10 +532,6 @@ def _render_institution_detail_page(
     with st.sidebar:
         st.header("Filtros dos projetos")
         project_query = st.text_input("Buscar projeto ou responsavel")
-        selected_statuses = st.multiselect(
-            "Situacao",
-            options=_project_status_options(project_rows),
-        )
         selected_years = st.multiselect(
             "Ano",
             options=_project_year_options(project_rows),
@@ -477,7 +547,7 @@ def _render_institution_detail_page(
     filtered_project_rows = _filter_project_rows(
         project_rows,
         query=project_query,
-        selected_statuses=selected_statuses,
+        selected_statuses=(),
         selected_years=selected_years,
         only_active=show_only_active_projects,
     )
@@ -515,11 +585,13 @@ def _render_institution_detail_page(
         input_dir,
         [str(institution_label)],
         include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
     )
     scholarship_detail_rows = load_scholarship_details(
         input_dir,
         [str(institution_label)],
         include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
     )
 
     (
@@ -697,6 +769,7 @@ def _render_researcher_page(
     input_dir: Path,
     *,
     include_excluded_projects: bool,
+    selected_statuses: Sequence[str],
     show_chart_values: bool,
 ) -> None:
     with st.sidebar:
@@ -712,22 +785,20 @@ def _render_researcher_page(
         input_dir,
         researcher_query,
         include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
     )
     if not project_rows:
         st.warning("Nenhum projeto encontrado para o pesquisador informado.")
         return
 
     with st.sidebar:
-        selected_statuses = st.multiselect(
-            "Status do projeto",
-            options=_project_status_options(project_rows),
-            key="researcher_project_statuses",
+        financial_chart_mode = st.radio(
+            "Visual do grafico financeiro",
+            options=("Barras agrupadas", "Barras empilhadas"),
+            key="researcher_financial_chart_mode",
         )
 
-    filtered_project_rows = _filter_researcher_project_rows(
-        project_rows,
-        selected_statuses=selected_statuses,
-    )
+    filtered_project_rows = _filter_researcher_project_rows(project_rows)
     if not filtered_project_rows:
         st.warning("Nenhum projeto encontrado para os status selecionados.")
         return
@@ -767,6 +838,9 @@ def _render_researcher_page(
         financial_timeline_frame = pd.DataFrame(
             _researcher_financial_timeline_rows(timeline_rows)
         )
+        financial_timeline_table_frame = pd.DataFrame(
+            _researcher_financial_timeline_table_rows(timeline_rows)
+        )
         left, right = st.columns(2)
         with left:
             st.subheader("Projetos por ano")
@@ -790,7 +864,13 @@ def _render_researcher_page(
                 color=_FINANCIAL_VOLUME_TYPE_COLUMN,
                 color_domain=("Orcamento contratado", "Valor bolsas"),
                 color_range=("#F2A541", "#8B5E34"),
+                stack=_financial_chart_stack_from_mode(str(financial_chart_mode)),
                 show_values=show_chart_values,
+            )
+            st.dataframe(
+                financial_timeline_table_frame,
+                use_container_width=True,
+                hide_index=True,
             )
 
     st.subheader("Projetos")
@@ -955,7 +1035,7 @@ def _researcher_name_rows(rows: Sequence[Mapping[str, object]]) -> list[ReportRo
 def _filter_researcher_project_rows(
     rows: Sequence[Mapping[str, object]],
     *,
-    selected_statuses: Sequence[str],
+    selected_statuses: Sequence[str] = (),
 ) -> list[ReportRow]:
     if not selected_statuses:
         return [dict(row) for row in rows]
@@ -1168,34 +1248,45 @@ def _grouped_bar_chart_with_total_labels(
     color: str,
     color_domain: Sequence[str],
     color_range: Sequence[str],
+    stack: str | None = None,
     show_values: bool = True,
 ) -> None:
     if dataframe.empty:
         st.info("Sem dados para o grafico.")
         return
 
-    base = alt.Chart(dataframe).encode(
-        x=alt.X(
+    y_encoding = alt.Y(
+        f"{y}:Q",
+        scale=_chart_y_scale(alt, dataframe, y),
+        stack=stack,
+        title=None,
+    )
+    encodings = {
+        "x": alt.X(
             f"{x}:O",
             sort=None,
             axis=alt.Axis(labelAngle=0, labelLimit=160),
         ),
-        xOffset=alt.XOffset(f"{color}:N", title=None),
-        y=alt.Y(
-            f"{y}:Q",
-            scale=_chart_y_scale(alt, dataframe, y),
-            title=None,
-        ),
-        color=alt.Color(
+        "y": y_encoding,
+        "color": alt.Color(
             f"{color}:N",
             scale=alt.Scale(domain=list(color_domain), range=list(color_range)),
             title=None,
         ),
-        tooltip=[
-            alt.Tooltip(f"{x}:O", title=x),
-            alt.Tooltip(f"{color}:N", title="Tipo"),
-            alt.Tooltip(f"{_CHART_LABEL_COLUMN}:N", title="Total"),
+        "tooltip": [
+            alt.Tooltip(f"{column}:N", title=title)
+            for column, title in _financial_chart_tooltip_fields(
+                dataframe.columns,
+                x,
+                color,
+            )
         ],
+    }
+    if stack is None:
+        encodings["xOffset"] = alt.XOffset(f"{color}:N", title=None)
+
+    base = alt.Chart(dataframe).encode(
+        **encodings,
     )
     bars = base.mark_bar()
     labels = base.mark_text(
@@ -1224,6 +1315,32 @@ def _chart_tooltip_fields(
                 break
 
     return tooltip_fields
+
+
+def _financial_chart_tooltip_fields(
+    columns: Sequence[str],
+    x_column: str,
+    color_column: str,
+) -> list[tuple[str, str]]:
+    existing_columns = set(columns)
+    tooltip_fields = [(x_column, x_column), (color_column, "Tipo")]
+    optional_fields = (
+        (_CHART_LABEL_COLUMN, "Total"),
+        (_PROJECTS_COLUMN, "Projetos"),
+        (_SCHOLARSHIPS_COLUMN, "Bolsas"),
+    )
+    for column, title in optional_fields:
+        if column in existing_columns:
+            tooltip_fields.append((column, title))
+
+    return tooltip_fields
+
+
+def _financial_chart_stack_from_mode(mode_label: str) -> str | None:
+    if mode_label == "Barras empilhadas":
+        return "zero"
+
+    return None
 
 
 def _chart_y_scale(alt: Any, dataframe: Any, y: str) -> Any:
@@ -1316,7 +1433,34 @@ def _researcher_financial_timeline_row(
         _CHART_LABEL_COLUMN: _short_currency_label(
             row.get(label_column, row.get(value_column))
         ),
+        _PROJECTS_COLUMN: _int_value(row.get(_PROJECTS_COLUMN)),
+        _SCHOLARSHIPS_COLUMN: _int_value(row.get(_SCHOLARSHIPS_COLUMN)),
     }
+
+
+def _researcher_financial_timeline_table_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    table_rows: list[ReportRow] = []
+    for row in rows:
+        budget = _decimal(row.get(_BUDGET_COLUMN, row.get(_BUDGET_VALUE_COLUMN)))
+        scholarships = _decimal(
+            row.get(
+                _SCHOLARSHIP_AMOUNT_COLUMN, row.get(_SCHOLARSHIP_AMOUNT_VALUE_COLUMN)
+            )
+        )
+        table_rows.append(
+            {
+                "Ano": row.get("ano", ""),
+                "Projetos": _int_value(row.get(_PROJECTS_COLUMN)),
+                "Bolsas": _int_value(row.get(_SCHOLARSHIPS_COLUMN)),
+                "Orcamento contratado": _currency_label(budget),
+                "Valor bolsas": _currency_label(scholarships),
+                "Total financeiro": _currency_label(budget + scholarships),
+            }
+        )
+
+    return table_rows
 
 
 def _add_money_tooltip_value(

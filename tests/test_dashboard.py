@@ -105,6 +105,137 @@ def test_dashboard_loads_summary_with_all_projects_when_requested(
     assert len(all_projects_data.excluded_project_rows) == 2
 
 
+def test_dashboard_loads_summary_filtered_by_global_project_status(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    input_dir = tmp_path / "projetos_por_edital"
+    input_dir.mkdir()
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[{"orcamento_quantidade": "2"}],
+                orcamento=[{"valor_categoria": "150"}],
+                valor_bolsa="1000",
+                situacao_descricao="Projeto Em Andamento",
+            ),
+            _project(
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[{"orcamento_quantidade": "5"}],
+                orcamento=[{"valor_categoria": "500"}],
+                valor_bolsa="250",
+                situacao_descricao="Projeto Concluído e homologado",
+            ),
+        ],
+    )
+
+    data = dashboard.load_dashboard_data(
+        input_dir,
+        selected_statuses=["Projeto Em Andamento"],
+    )
+
+    assert data.total_projects == 1
+    assert data.total_scholarships == 2
+    assert data.total_scholarship_amount == "1.000,00"
+    assert data.total_budget == "150,00"
+
+
+def test_dashboard_loads_researcher_scholarship_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    input_dir = tmp_path / "projetos_por_edital"
+    input_dir.mkdir()
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                projeto_id="101",
+                coordenador_nome="Maria Silva",
+                pesquisador_id="99",
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[
+                    {
+                        "sigla": "ICT",
+                        "nome": "Iniciacao Cientifica",
+                        "orcamento_quantidade": "2",
+                        "orcamento_custo": "300",
+                        "orcamento_duracao": "2",
+                    }
+                ],
+                orcamento=[{"valor_categoria": "150"}],
+                valor_bolsa="1200",
+                situacao_descricao="Projeto Em Andamento",
+            ),
+            _project(
+                projeto_id="102",
+                coordenador_nome="Joao Souza",
+                pesquisador_id="77",
+                instituicao_nome="Instituto Federal do Espirito Santo",
+                instituicao_sigla="IFES",
+                bolsas=[
+                    {
+                        "sigla": "ICT",
+                        "nome": "Iniciacao Cientifica",
+                        "orcamento_quantidade": "10",
+                        "vlrtot": "9999",
+                    }
+                ],
+                orcamento=[{"valor_categoria": "9999"}],
+                valor_bolsa="9999",
+                situacao_descricao="Projeto Não Contratado",
+            ),
+        ],
+    )
+
+    data = dashboard.load_dashboard_data(input_dir)
+    all_projects_data = dashboard.load_dashboard_data(
+        input_dir,
+        include_excluded_projects=True,
+    )
+
+    assert data.researcher_scholarship_rows == [
+        {
+            "arquivo_origem": "edital_1_projetos.json",
+            "pesquisador_id": "99",
+            "pesquisador_nome": "Maria Silva",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "projeto_id": "101",
+            "projeto_titulo": "",
+            "situacao_descricao": "Projeto Em Andamento",
+            "bolsa_sigla": "ICT",
+            "bolsa_nome": "Iniciacao Cientifica",
+            "quantidade": 2,
+            "duracao": 2,
+            "valor_unitario": "300,00",
+            "valor_total": "1.200,00",
+        }
+    ]
+    assert data.researcher_scholarship_summary_rows == [
+        {
+            "pesquisador_id": "99",
+            "pesquisador_nome": "Maria Silva",
+            "instituicoes": "Universidade Federal do Espirito Santo | UFES - VITÓRIA",
+            "total_projetos": 1,
+            "total_lancamentos_bolsa": 1,
+            "quantidade_bolsas": 2,
+            "valor_total_bolsas": "1.200,00",
+        }
+    ]
+    assert len(all_projects_data.researcher_scholarship_rows) == 2
+    assert len(all_projects_data.researcher_scholarship_summary_rows) == 2
+
+
 def test_dashboard_filters_and_sorts_rows_by_metric(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -378,6 +509,8 @@ def test_dashboard_builds_researcher_financial_timeline_rows(
     timeline_rows = [
         {
             "ano": 2024,
+            "total_projetos": 2,
+            "quantidade_bolsas": 3,
             "orcamento_contratado": "1.234,50",
             "orcamento_contratado_valor": 1234.5,
             "valor_bolsas": "500,00",
@@ -385,6 +518,8 @@ def test_dashboard_builds_researcher_financial_timeline_rows(
         },
         {
             "ano": 2025,
+            "total_projetos": 1,
+            "quantidade_bolsas": 4,
             "orcamento_contratado": "2.000.000,00",
             "orcamento_contratado_valor": 2000000.0,
             "valor_bolsas": "750.000,00",
@@ -400,26 +535,119 @@ def test_dashboard_builds_researcher_financial_timeline_rows(
             "tipo_volume_financeiro": "Orcamento contratado",
             "valor_financeiro": 1234.5,
             "valor_total": "R$ 1,2 mil",
+            "total_projetos": 2,
+            "quantidade_bolsas": 3,
         },
         {
             "ano": 2024,
             "tipo_volume_financeiro": "Valor bolsas",
             "valor_financeiro": 500.0,
             "valor_total": "R$ 500,00",
+            "total_projetos": 2,
+            "quantidade_bolsas": 3,
         },
         {
             "ano": 2025,
             "tipo_volume_financeiro": "Orcamento contratado",
             "valor_financeiro": 2000000.0,
             "valor_total": "R$ 2 mi",
+            "total_projetos": 1,
+            "quantidade_bolsas": 4,
         },
         {
             "ano": 2025,
             "tipo_volume_financeiro": "Valor bolsas",
             "valor_financeiro": 750000.0,
             "valor_total": "R$ 750 mil",
+            "total_projetos": 1,
+            "quantidade_bolsas": 4,
         },
     ]
+
+
+def test_dashboard_builds_researcher_financial_timeline_table_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    timeline_rows = [
+        {
+            "ano": 2024,
+            "total_projetos": 2,
+            "quantidade_bolsas": 3,
+            "orcamento_contratado": "1.234,50",
+            "orcamento_contratado_valor": 1234.5,
+            "valor_bolsas": "500,00",
+            "valor_bolsas_valor": 500.0,
+        },
+        {
+            "ano": 2025,
+            "total_projetos": 1,
+            "quantidade_bolsas": 4,
+            "orcamento_contratado": "2.000.000,00",
+            "orcamento_contratado_valor": 2000000.0,
+            "valor_bolsas": "750.000,00",
+            "valor_bolsas_valor": 750000.0,
+        },
+    ]
+
+    table_rows = dashboard._researcher_financial_timeline_table_rows(timeline_rows)
+
+    assert table_rows == [
+        {
+            "Ano": 2024,
+            "Projetos": 2,
+            "Bolsas": 3,
+            "Orcamento contratado": "R$ 1.234,50",
+            "Valor bolsas": "R$ 500,00",
+            "Total financeiro": "R$ 1.734,50",
+        },
+        {
+            "Ano": 2025,
+            "Projetos": 1,
+            "Bolsas": 4,
+            "Orcamento contratado": "R$ 2.000.000,00",
+            "Valor bolsas": "R$ 750.000,00",
+            "Total financeiro": "R$ 2.750.000,00",
+        },
+    ]
+
+
+def test_dashboard_builds_financial_chart_tooltip_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+
+    tooltip_fields = dashboard._financial_chart_tooltip_fields(
+        [
+            "ano",
+            "tipo_volume_financeiro",
+            "valor_total",
+            "total_projetos",
+            "quantidade_bolsas",
+        ],
+        "ano",
+        "tipo_volume_financeiro",
+    )
+
+    assert tooltip_fields == [
+        ("ano", "ano"),
+        ("tipo_volume_financeiro", "Tipo"),
+        ("valor_total", "Total"),
+        ("total_projetos", "Projetos"),
+        ("quantidade_bolsas", "Bolsas"),
+    ]
+
+
+def test_dashboard_maps_financial_chart_mode_to_stack_option(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+
+    assert dashboard._financial_chart_stack_from_mode("Barras agrupadas") is None
+    assert dashboard._financial_chart_stack_from_mode("Barras empilhadas") == "zero"
 
 
 def test_dashboard_builds_rich_chart_tooltip_fields(
@@ -793,6 +1021,10 @@ def _write_project_file(path: Path, projetos: list[dict[str, object]]) -> None:
 
 def _project(
     *,
+    projeto_id: str = "",
+    projeto_titulo: str = "",
+    coordenador_nome: str = "",
+    pesquisador_id: str = "",
     instituicao_nome: str,
     instituicao_sigla: str,
     bolsas: list[dict[str, str]],
@@ -801,11 +1033,16 @@ def _project(
     situacao_descricao: str = "Projeto aprovado",
 ) -> dict[str, object]:
     return {
+        "projeto_id": projeto_id,
+        "projeto_titulo": projeto_titulo,
+        "coordenador_nome": coordenador_nome,
         "valor_bolsa": valor_bolsa,
         "situacao_descricao": situacao_descricao,
         "dados_coordenador": {
             "data": [
                 {
+                    "pesquisador_id": pesquisador_id,
+                    "pesquisador_nome": coordenador_nome,
                     "instituicao_nome": instituicao_nome,
                     "instituicao_sigla": instituicao_sigla,
                 }

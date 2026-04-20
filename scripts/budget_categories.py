@@ -12,9 +12,9 @@ from scripts.report import (
     _decimal,
     _envelope_records,
     _institution_for_project,
-    _is_not_contracted_project,
     _money,
     _projects_from_file,
+    _should_skip_project,
 )
 
 BudgetCategoryRow: TypeAlias = dict[str, object]
@@ -50,6 +50,7 @@ def load_budget_categories(
     institution_labels: Sequence[str],
     *,
     include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
 ) -> list[BudgetCategoryRow]:
     """Aggregate contracted budget by readable category for selected institutions."""
 
@@ -57,7 +58,11 @@ def load_budget_categories(
     totals: dict[str, BudgetCategoryTotals] = {}
     for path in sorted(Path(input_dir).glob("*.json")):
         for projeto in _projects_from_file(path):
-            if _should_skip_project(projeto, include_excluded_projects):
+            if _should_skip_project(
+                projeto,
+                include_excluded_projects,
+                selected_statuses,
+            ):
                 continue
             if selected_labels and _label_for_project(projeto) not in selected_labels:
                 continue
@@ -80,13 +85,6 @@ def load_budget_categories(
             ),
         )
     ]
-
-
-def _should_skip_project(
-    projeto: Mapping[str, object],
-    include_excluded_projects: bool,
-) -> bool:
-    return not include_excluded_projects and _is_not_contracted_project(projeto)
 
 
 def _readable_category(value: object) -> str:
