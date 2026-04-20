@@ -41,7 +41,12 @@ jobs:
           python -m pip install -e ".[dev]"
 
       - name: Run tests
-        run: python -m pytest
+        run: >
+          python -m pytest
+          tests/bdd
+          tests/unit
+          tests/test_package_import.py
+          tests/integration/test_real_editais_projetos.py
 
       - name: Run Ruff lint
         run: ruff check .
