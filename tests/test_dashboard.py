@@ -802,6 +802,43 @@ def test_dashboard_converts_financial_table_columns_to_numeric_for_sorting(
     ]
 
 
+def test_dashboard_converts_date_table_columns_to_datetime_for_sorting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    pd = importlib.import_module("pandas")
+    frame = pd.DataFrame(
+        [
+            {
+                "Projeto": "Depois",
+                "Inicio": "10/01/2024",
+                "Termino": "10/01/2025",
+            },
+            {
+                "Projeto": "Meio ISO",
+                "Inicio": "2024-01-05 00:00:00",
+                "Termino": "2025-01-05 00:00:00",
+            },
+            {
+                "Projeto": "Antes",
+                "Inicio": "02/01/2024",
+                "Termino": "02/01/2025",
+            },
+        ]
+    )
+
+    sortable_frame = dashboard._sortable_table_dataframe(frame)
+
+    assert str(sortable_frame["Inicio"].dtype).startswith("datetime64")
+    assert str(sortable_frame["Termino"].dtype).startswith("datetime64")
+    assert list(sortable_frame.sort_values("Inicio")["Projeto"]) == [
+        "Antes",
+        "Meio ISO",
+        "Depois",
+    ]
+
+
 def test_dashboard_builds_chart_rows_with_total_value_labels(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

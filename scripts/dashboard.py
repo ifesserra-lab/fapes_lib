@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -72,6 +73,18 @@ _TABLE_MONEY_COLUMNS: Final = frozenset(
         "valor_total_bolsas",
     }
 )
+_TABLE_DATE_COLUMNS: Final = frozenset(
+    {
+        "Inicio",
+        "Termino",
+        "Inicio previsto",
+        "Conclusao prevista",
+        "Data inicio",
+        "Data fim",
+        "Data conclusao",
+    }
+)
+_ISO_DATE_PATTERN: Final = re.compile(r"^\d{4}-\d{2}-\d{2}")
 _UNKNOWN_INSTITUTION = "Sem informacao"
 _NO_MATCH_INSTITUTION_LABEL = "__sem_instituicao__"
 _TOOLTIP_FIELD_GROUPS: Final = (
@@ -2255,15 +2268,24 @@ def _sortable_table_dataframe(dataframe: Any) -> Any:
         sortable_frame[column] = sortable_frame[column].map(
             lambda value: float(_decimal(value))
         )
+    for column in _sortable_table_date_columns(sortable_frame):
+        sortable_frame[column] = _to_datetime_column(sortable_frame[column])
 
     return sortable_frame
 
 
 def _sortable_table_column_config(st: Any, dataframe: Any) -> dict[str, Any]:
-    return {
+    config = {
         column: st.column_config.NumberColumn(column, format="R$ %.2f")
         for column in _sortable_table_money_columns(dataframe)
     }
+    config.update(
+        {
+            column: st.column_config.DateColumn(column, format="DD/MM/YYYY")
+            for column in _sortable_table_date_columns(dataframe)
+        }
+    )
+    return config
 
 
 def _sortable_table_money_columns(dataframe: Any) -> list[str]:
@@ -2273,6 +2295,38 @@ def _sortable_table_money_columns(dataframe: Any) -> list[str]:
         return []
 
     return [column for column in columns if column in _TABLE_MONEY_COLUMNS]
+
+
+def _sortable_table_date_columns(dataframe: Any) -> list[str]:
+    try:
+        columns = list(dataframe.columns)
+    except AttributeError:
+        return []
+
+    return [column for column in columns if column in _TABLE_DATE_COLUMNS]
+
+
+def _to_datetime_column(series: Any) -> Any:
+    try:
+        return series.map(_parse_table_date)
+    except AttributeError:
+        return series
+
+
+def _parse_table_date(value: object) -> object:
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return None
+
+    try:
+        pd = cast(Any, import_module("pandas"))
+
+        if _ISO_DATE_PATTERN.match(raw_value):
+            return pd.to_datetime(raw_value, errors="coerce")
+
+        return pd.to_datetime(raw_value, dayfirst=True, errors="coerce")
+    except (ImportError, ValueError, TypeError):
+        return None
 
 
 def _summary_totals(rows: Sequence[Mapping[str, object]]) -> DashboardTotals:
