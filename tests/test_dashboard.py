@@ -1723,6 +1723,87 @@ def test_dashboard_builds_institution_location_comparison_rows(
     ]
 
 
+def test_dashboard_builds_distinct_aligned_institution_location_filter_options(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    summary_rows = [
+        {"Instituicao": "Instituto Federal do Espirito Santo", "Local": "SERRA"},
+        {"Instituicao": "Instituto Federal do Espirito Santo", "Local": "SERRA"},
+        {"Instituicao": "Instituto Federal do Espirito Santo", "Local": "VITÓRIA"},
+        {"Instituicao": "Universidade Federal do Espirito Santo", "Local": "VITÓRIA"},
+    ]
+
+    assert dashboard._institution_location_institution_options(summary_rows) == [
+        "Instituto Federal do Espirito Santo",
+        "Universidade Federal do Espirito Santo",
+    ]
+    assert dashboard._institution_location_local_options(summary_rows) == [
+        "SERRA",
+        "VITÓRIA",
+    ]
+    assert dashboard._institution_location_local_options(
+        summary_rows,
+        selected_institutions=["Universidade Federal do Espirito Santo"],
+    ) == ["VITÓRIA"]
+
+
+def test_dashboard_filters_institution_location_by_institution_and_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    summary_rows = [
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES",
+            "Local": "SERRA",
+        },
+        {
+            "Instituicao": "Instituto Federal do Espirito Santo",
+            "Sigla": "IFES",
+            "Local": "VITÓRIA",
+        },
+        {
+            "Instituicao": "Universidade Federal do Espirito Santo",
+            "Sigla": "UFES",
+            "Local": "VITÓRIA",
+        },
+    ]
+    rows = [
+        {
+            "instituicao_nome": "Instituto Federal do Espirito Santo",
+            "locais": [
+                {
+                    "instituicao_sigla": "IFES",
+                    "local": "SERRA",
+                    "projetos": [{"projeto_id": "101", "projeto_titulo": "Serra"}],
+                },
+                {
+                    "instituicao_sigla": "IFES",
+                    "local": "VITÓRIA",
+                    "projetos": [{"projeto_id": "102", "projeto_titulo": "Vitoria"}],
+                },
+            ],
+        }
+    ]
+
+    filtered_rows = dashboard._filter_institution_location_table_rows(
+        summary_rows,
+        selected_institutions=["Instituto Federal do Espirito Santo"],
+        selected_local_names=["VITÓRIA"],
+    )
+    project_rows = dashboard._institution_location_project_rows(
+        rows,
+        selected_institutions=["Instituto Federal do Espirito Santo"],
+        selected_local_names=["VITÓRIA"],
+    )
+
+    assert filtered_rows == [summary_rows[1]]
+    assert [row["Projeto ID"] for row in project_rows] == ["102"]
+
+
 class _FakeColumnConfig:
     @staticmethod
     def NumberColumn(label: str, *, format: str) -> dict[str, str]:

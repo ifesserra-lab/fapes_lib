@@ -1204,13 +1204,20 @@ def _render_institution_location_page(
         return
 
     summary_rows = _institution_location_summary_rows(rows)
-    location_labels = _institution_location_labels(summary_rows)
     with st.sidebar:
         st.header("Filtros de instituicao/local")
-        selected_locations = st.multiselect(
-            "Instituicao e local",
-            options=location_labels,
-            placeholder="Selecione uma ou mais instituicoes/locais",
+        selected_institutions = st.multiselect(
+            "Instituicao",
+            options=_institution_location_institution_options(summary_rows),
+            placeholder="Selecione uma ou mais instituicoes",
+        )
+        selected_local_names = st.multiselect(
+            "Local",
+            options=_institution_location_local_options(
+                summary_rows,
+                selected_institutions=selected_institutions,
+            ),
+            placeholder="Selecione um ou mais locais",
         )
         location_query = st.text_input("Buscar instituicao, local ou projeto")
         comparison_institution = st.selectbox(
@@ -1221,35 +1228,36 @@ def _render_institution_location_page(
 
     filtered_summary_rows = _filter_institution_location_table_rows(
         summary_rows,
-        selected_locations=selected_locations,
+        selected_institutions=selected_institutions,
+        selected_local_names=selected_local_names,
         query=location_query,
     )
     if not filtered_summary_rows:
         st.warning("Nenhum local encontrado para os filtros selecionados.")
         return
 
-    selected_location_set = {
-        _institution_location_table_label(row) for row in filtered_summary_rows
-    }
-    selected_location_labels = list(selected_location_set)
     project_rows = _institution_location_project_rows(
         rows,
-        selected_locations=selected_location_labels,
+        selected_institutions=selected_institutions,
+        selected_local_names=selected_local_names,
         query=location_query,
     )
     budget_rows = _institution_location_budget_rows(
         rows,
-        selected_locations=selected_location_labels,
+        selected_institutions=selected_institutions,
+        selected_local_names=selected_local_names,
         query=location_query,
     )
     scholarship_rows = _institution_location_scholarship_rows(
         rows,
-        selected_locations=selected_location_labels,
+        selected_institutions=selected_institutions,
+        selected_local_names=selected_local_names,
         query=location_query,
     )
     holder_rows = _institution_location_holder_rows(
         rows,
-        selected_locations=selected_location_labels,
+        selected_institutions=selected_institutions,
+        selected_local_names=selected_local_names,
         query=location_query,
     )
     selected_rubrics = st.sidebar.multiselect(
@@ -2304,6 +2312,8 @@ def _institution_location_project_rows(
     rows: Sequence[Mapping[str, object]],
     *,
     selected_locations: Sequence[str] = (),
+    selected_institutions: Sequence[str] = (),
+    selected_local_names: Sequence[str] = (),
     query: str = "",
 ) -> list[ReportRow]:
     project_rows: list[ReportRow] = []
@@ -2313,6 +2323,8 @@ def _institution_location_project_rows(
             location,
             project,
             selected_locations=selected_locations,
+            selected_institutions=selected_institutions,
+            selected_local_names=selected_local_names,
             query=query,
         ):
             continue
@@ -2340,6 +2352,8 @@ def _institution_location_budget_rows(
     rows: Sequence[Mapping[str, object]],
     *,
     selected_locations: Sequence[str] = (),
+    selected_institutions: Sequence[str] = (),
+    selected_local_names: Sequence[str] = (),
     query: str = "",
 ) -> list[ReportRow]:
     budget_rows: list[ReportRow] = []
@@ -2349,6 +2363,8 @@ def _institution_location_budget_rows(
             location,
             project,
             selected_locations=selected_locations,
+            selected_institutions=selected_institutions,
+            selected_local_names=selected_local_names,
             query=query,
         ):
             continue
@@ -2373,6 +2389,8 @@ def _institution_location_scholarship_rows(
     rows: Sequence[Mapping[str, object]],
     *,
     selected_locations: Sequence[str] = (),
+    selected_institutions: Sequence[str] = (),
+    selected_local_names: Sequence[str] = (),
     query: str = "",
 ) -> list[ReportRow]:
     scholarship_rows: list[ReportRow] = []
@@ -2382,6 +2400,8 @@ def _institution_location_scholarship_rows(
             location,
             project,
             selected_locations=selected_locations,
+            selected_institutions=selected_institutions,
+            selected_local_names=selected_local_names,
             query=query,
         ):
             continue
@@ -2409,6 +2429,8 @@ def _institution_location_holder_rows(
     rows: Sequence[Mapping[str, object]],
     *,
     selected_locations: Sequence[str] = (),
+    selected_institutions: Sequence[str] = (),
+    selected_local_names: Sequence[str] = (),
     query: str = "",
 ) -> list[ReportRow]:
     holder_rows: list[ReportRow] = []
@@ -2418,6 +2440,8 @@ def _institution_location_holder_rows(
             location,
             project,
             selected_locations=selected_locations,
+            selected_institutions=selected_institutions,
+            selected_local_names=selected_local_names,
             query=query,
         ):
             continue
@@ -2449,6 +2473,23 @@ def _institution_location_institution_options(
     rows: Sequence[Mapping[str, object]],
 ) -> list[str]:
     labels = {str(row.get("Instituicao", "")).strip() for row in rows}
+    return sorted((label for label in labels if label), key=str.casefold)
+
+
+def _institution_location_local_options(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_institutions: Sequence[str] = (),
+) -> list[str]:
+    selected_institution_set = set(selected_institutions)
+    labels = {
+        str(row.get("Local", "")).strip()
+        for row in rows
+        if (
+            not selected_institution_set
+            or str(row.get("Instituicao", "")).strip() in selected_institution_set
+        )
+    }
     return sorted((label for label in labels if label), key=str.casefold)
 
 
@@ -2486,15 +2527,27 @@ def _filter_institution_location_table_rows(
     rows: Sequence[Mapping[str, object]],
     *,
     selected_locations: Sequence[str] = (),
+    selected_institutions: Sequence[str] = (),
+    selected_local_names: Sequence[str] = (),
     query: str = "",
 ) -> list[ReportRow]:
     selected_location_set = set(selected_locations)
+    selected_institution_set = set(selected_institutions)
+    selected_local_set = set(selected_local_names)
     return [
         dict(row)
         for row in rows
         if (
             not selected_location_set
             or _institution_location_table_label(row) in selected_location_set
+        )
+        and (
+            not selected_institution_set
+            or str(row.get("Instituicao", "")).strip() in selected_institution_set
+        )
+        and (
+            not selected_local_set
+            or str(row.get("Local", "")).strip() in selected_local_set
         )
         and _institution_location_matches_query(
             (
@@ -2596,12 +2649,22 @@ def _institution_location_context_matches(
     project: Mapping[str, object],
     *,
     selected_locations: Sequence[str],
+    selected_institutions: Sequence[str] = (),
+    selected_local_names: Sequence[str] = (),
     query: str,
 ) -> bool:
     if selected_locations and _institution_location_label_from_parts(
         institution.get("instituicao_nome"),
         location.get("instituicao_sigla"),
     ) not in set(selected_locations):
+        return False
+
+    institution_name = str(institution.get("instituicao_nome", "")).strip()
+    if selected_institutions and institution_name not in set(selected_institutions):
+        return False
+
+    local_name = str(location.get("local", "")).strip()
+    if selected_local_names and local_name not in set(selected_local_names):
         return False
 
     return _institution_location_matches_query(
