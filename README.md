@@ -90,6 +90,13 @@ FAPES_SENHA="..."
 
 O arquivo `.env` e local, contem segredos e nao deve ser versionado.
 
+## Dados Gerados Localmente
+
+A pasta `downloads/` e usada pelos scripts e pelo dashboard para armazenar
+JSONs, CSVs e relatorios gerados localmente a partir da API FAPES. Esses
+arquivos podem ser grandes, variam conforme a execucao e nao sao versionados;
+gere-os novamente com `scripts/main.py` e `scripts/report.py` quando necessario.
+
 ## Desenvolvimento
 
 Fluxo esperado para qualquer implementacao:
