@@ -297,6 +297,7 @@ def test_report_cli_writes_scholarship_allocations_from_fapes_api(
     input_dir = tmp_path / "projetos_por_edital"
     output_file = tmp_path / "relatorio.csv"
     allocations_file = tmp_path / "alocacao_bolsas.csv"
+    allocations_json_file = tmp_path / "alocacao_bolsas.json"
     api_client = FakeScholarshipAllocationApi()
     input_dir.mkdir()
     _write_project_file(
@@ -323,6 +324,8 @@ def test_report_cli_writes_scholarship_allocations_from_fapes_api(
             str(output_file),
             "--scholarship-allocations-output",
             str(allocations_file),
+            "--scholarship-allocations-json-output",
+            str(allocations_json_file),
             "--scholarship-allocation-max-workers",
             "1",
         ],
@@ -364,6 +367,38 @@ def test_report_cli_writes_scholarship_allocations_from_fapes_api(
     ]
     assert "bolsista_pesquisador_cpf" not in rows[0]
     assert "formulario_numero_conta" not in rows[0]
+
+    json_rows = json.loads(allocations_json_file.read_text(encoding="utf-8"))
+    assert json_rows == [
+        {
+            "arquivo_origem": "edital_1_projetos.json",
+            "projeto_id": "101",
+            "projeto_titulo": "Projeto com bolsista",
+            "situacao_descricao": "Projeto Em Andamento",
+            "coordenador_nome": "Maria Silva",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "bolsista_pesquisador_id": "501",
+            "bolsista_pesquisador_nome": "Aluno Bolsista",
+            "formulario_bolsa_id": "9001",
+            "formulario_bolsa_situacao": "1",
+            "formulario_bolsa_inicio": "01/02/2024",
+            "formulario_bolsa_termino": "01/02/2025",
+            "formulario_cancel_bolsa_data": "",
+            "formulario_subst_bolsa_data": "",
+            "bolsa_sigla": "ICT",
+            "bolsa_nome": "Iniciacao Cientifica",
+            "bolsa_nivel_id": "51",
+            "bolsa_nivel_nome": "ICT",
+            "bolsa_nivel_valor": "700,00",
+            "qtd_bolsas_paga": 2,
+            "valor_alocado_total": "1.400,00",
+            "pagamentos": 2,
+            "valor_pago_total": "1.400,50",
+        }
+    ]
+    assert "bolsista_pesquisador_cpf" not in json_rows[0]
+    assert "formulario_numero_conta" not in json_rows[0]
 
 
 def test_report_keeps_same_institution_name_with_different_acronyms_separate(

@@ -437,6 +437,7 @@ def run(
     researcher_scholarships_output = None
     researcher_scholarships_summary_output = None
     scholarship_allocations_output = None
+    scholarship_allocations_json_output = None
     if args.researcher_scholarships_output is not None:
         researcher_scholarship_rows = generate_researcher_scholarships_report(
             args.input_dir
@@ -457,7 +458,10 @@ def run(
             )
         )
 
-    if args.scholarship_allocations_output is not None:
+    if (
+        args.scholarship_allocations_output is not None
+        or args.scholarship_allocations_json_output is not None
+    ):
         factory = (
             api_client_factory if api_client_factory is not None else _build_api_client
         )
@@ -468,10 +472,16 @@ def run(
             retry_attempts=args.scholarship_allocation_retries,
             limit=args.scholarship_allocation_limit,
         )
-        scholarship_allocations_output = write_scholarship_allocations_report(
-            scholarship_allocation_rows,
-            args.scholarship_allocations_output,
-        )
+        if args.scholarship_allocations_output is not None:
+            scholarship_allocations_output = write_scholarship_allocations_report(
+                scholarship_allocation_rows,
+                args.scholarship_allocations_output,
+            )
+        if args.scholarship_allocations_json_output is not None:
+            scholarship_allocations_json_output = write_scholarship_allocations_report(
+                scholarship_allocation_rows,
+                args.scholarship_allocations_json_output,
+            )
 
     total_projects = sum(_int_quantity(row["total_projetos"]) for row in rows)
     total_scholarships = sum(_int_quantity(row["quantidade_bolsas"]) for row in rows)
@@ -497,6 +507,8 @@ def run(
         )
     if scholarship_allocations_output is not None:
         print(f"Alocacao de bolsas gerada: {scholarship_allocations_output}")
+    if scholarship_allocations_json_output is not None:
+        print(f"Alocacao de bolsas JSON gerada: {scholarship_allocations_json_output}")
     print(f"Instituicoes: {len(rows)}")
     print(f"Projetos: {total_projects}")
     print(f"Bolsas: {total_scholarships}")
@@ -552,6 +564,15 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
         help=(
             "Arquivo CSV ou JSON para buscar na FAPES as alocacoes reais "
             "de bolsas por projeto via endpoint bolsistas."
+        ),
+    )
+    parser.add_argument(
+        "--scholarship-allocations-json-output",
+        type=Path,
+        default=None,
+        help=(
+            "Arquivo JSON adicional para salvar as alocacoes reais de bolsas "
+            "por projeto via endpoint bolsistas."
         ),
     )
     parser.add_argument(

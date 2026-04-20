@@ -155,6 +155,18 @@ somando a quantidade de bolsas e o orcamento contratado:
 python scripts/report.py --input-dir downloads/projetos_por_edital --output downloads/relatorio_instituicoes.csv
 ```
 
+Para buscar na FAPES a alocacao real de bolsistas dos projetos e salvar em CSV
+e JSON:
+
+```bash
+python scripts/report.py \
+  --input-dir downloads/projetos_por_edital \
+  --output downloads/relatorio_instituicoes.csv \
+  --scholarship-allocations-output downloads/relatorio_alocacao_bolsas.csv \
+  --scholarship-allocations-json-output downloads/relatorio_alocacao_bolsas.json \
+  --scholarship-allocation-max-workers 4
+```
+
 Para abrir o dashboard Streamlit com os JSONs baixados:
 
 ```bash
