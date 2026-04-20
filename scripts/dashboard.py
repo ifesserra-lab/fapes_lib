@@ -2255,7 +2255,7 @@ def _display_dataframe(pd_module: Any, rows: Sequence[Mapping[str, object]]) -> 
 def _render_sortable_dataframe(st: Any, dataframe: Any) -> None:
     sortable_frame = _sortable_table_dataframe(dataframe)
     st.dataframe(
-        sortable_frame,
+        _sortable_table_display_data(sortable_frame),
         use_container_width=True,
         hide_index=True,
         column_config=_sortable_table_column_config(st, sortable_frame),
@@ -2275,17 +2275,24 @@ def _sortable_table_dataframe(dataframe: Any) -> Any:
 
 
 def _sortable_table_column_config(st: Any, dataframe: Any) -> dict[str, Any]:
-    config = {
-        column: st.column_config.NumberColumn(column, format="R$ %.2f")
-        for column in _sortable_table_money_columns(dataframe)
+    return {
+        column: st.column_config.DateColumn(column, format="DD/MM/YYYY")
+        for column in _sortable_table_date_columns(dataframe)
     }
-    config.update(
-        {
-            column: st.column_config.DateColumn(column, format="DD/MM/YYYY")
-            for column in _sortable_table_date_columns(dataframe)
-        }
-    )
-    return config
+
+
+def _sortable_table_display_data(dataframe: Any) -> Any:
+    money_columns = _sortable_table_money_columns(dataframe)
+    if not money_columns:
+        return dataframe
+
+    try:
+        return dataframe.style.format(
+            {column: _currency_table_label for column in money_columns},
+            na_rep="",
+        )
+    except AttributeError:
+        return dataframe
 
 
 def _sortable_table_money_columns(dataframe: Any) -> list[str]:
@@ -2385,6 +2392,14 @@ def _metric_from_label(label: str) -> str:
 
 def _currency_label(value: object) -> str:
     return f"R$ {_money(_decimal(value))}"
+
+
+def _currency_table_label(value: object) -> str:
+    amount = _decimal(value)
+    if amount.is_nan():
+        return ""
+
+    return f"R$ {_money(amount)}"
 
 
 def _short_currency_label(value: object) -> str:

@@ -802,6 +802,33 @@ def test_dashboard_converts_financial_table_columns_to_numeric_for_sorting(
     ]
 
 
+def test_dashboard_formats_financial_table_columns_as_brazilian_currency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    pd = importlib.import_module("pandas")
+    frame = pd.DataFrame(
+        [
+            {
+                "Bolsista": "Valor maior",
+                "Valor alocado": "R$ 10.000,00",
+                "Valor pago": "R$ 1.500,50",
+            }
+        ]
+    )
+    streamlit = _FakeStreamlit()
+
+    dashboard._render_sortable_dataframe(streamlit, frame)
+
+    rendered_data, kwargs = streamlit.dataframe_calls[0]
+    assert list(rendered_data.data["Valor alocado"]) == [10000.0]
+    assert "Valor alocado" not in kwargs["column_config"]
+    assert "Valor pago" not in kwargs["column_config"]
+    assert rendered_data._display_funcs[(0, 1)](10000.0) == "R$ 10.000,00"
+    assert rendered_data._display_funcs[(0, 2)](1500.5) == "R$ 1.500,50"
+
+
 def test_dashboard_converts_date_table_columns_to_datetime_for_sorting(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1395,6 +1422,26 @@ def test_dashboard_builds_scholarship_detail_table_rows(
             "Lancamentos": 3,
         }
     ]
+
+
+class _FakeColumnConfig:
+    @staticmethod
+    def NumberColumn(label: str, *, format: str) -> dict[str, str]:
+        return {"type": "number", "label": label, "format": format}
+
+    @staticmethod
+    def DateColumn(label: str, *, format: str) -> dict[str, str]:
+        return {"type": "date", "label": label, "format": format}
+
+
+class _FakeStreamlit:
+    column_config = _FakeColumnConfig()
+
+    def __init__(self) -> None:
+        self.dataframe_calls: list[tuple[Any, dict[str, Any]]] = []
+
+    def dataframe(self, dataframe: Any, **kwargs: Any) -> None:
+        self.dataframe_calls.append((dataframe, kwargs))
 
 
 def _write_project_file(path: Path, projetos: list[dict[str, object]]) -> None:
