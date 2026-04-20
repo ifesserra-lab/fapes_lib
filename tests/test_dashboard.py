@@ -384,6 +384,10 @@ def test_dashboard_filters_and_summarizes_scholarship_allocations(
         query="aluno",
     )
     totals = dashboard._scholarship_allocation_totals(filtered_rows)
+    summary_rows = dashboard._scholarship_allocation_holder_summary_rows(filtered_rows)
+    summary_table_rows = dashboard._scholarship_allocation_summary_table_rows(
+        summary_rows
+    )
     table_rows = dashboard._scholarship_allocation_table_rows(filtered_rows)
 
     assert institution_options == [
@@ -396,6 +400,20 @@ def test_dashboard_filters_and_summarizes_scholarship_allocations(
     assert totals.total_paid_scholarships == 2
     assert totals.total_allocated_amount == "1.400,00"
     assert totals.total_paid_amount == "1.400,50"
+    assert summary_table_rows == [
+        {
+            "Bolsista": "Aluno Bolsista",
+            "Projetos": 1,
+            "Nomes dos projetos": "Projeto com bolsista",
+            "Instituicoes": 1,
+            "Instituicoes vinculadas": (
+                "Universidade Federal do Espirito Santo | UFES - VITÓRIA"
+            ),
+            "Bolsas pagas": 2,
+            "Valor alocado": "R$ 1.400,00",
+            "Valor pago": "R$ 1.400,50",
+        }
+    ]
     assert table_rows == [
         {
             "Bolsista": "Aluno Bolsista",

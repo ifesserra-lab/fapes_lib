@@ -1133,7 +1133,9 @@ def _render_scholarship_allocations_page(
 
     summary_rows = _scholarship_allocation_holder_summary_rows(filtered_rows)
     table_rows = _scholarship_allocation_table_rows(filtered_rows)
-    summary_frame = pd.DataFrame(summary_rows)
+    summary_frame = pd.DataFrame(
+        _scholarship_allocation_summary_table_rows(summary_rows)
+    )
     table_frame = pd.DataFrame(table_rows)
     tab_summary, tab_table = st.tabs(["Resumo", "Tabela"])
 
@@ -1555,6 +1557,7 @@ def _scholarship_allocation_holder_summary_rows(
             totals[holder_key] = {
                 "bolsista": holder_name,
                 "projetos": set(),
+                "projetos_nomes": set(),
                 "instituicoes": set(),
                 "bolsas_pagas": 0,
                 _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN: Decimal("0"),
@@ -1565,6 +1568,9 @@ def _scholarship_allocation_holder_summary_rows(
         project_id = str(row.get("projeto_id") or "").strip()
         if project_id:
             cast(set[str], total["projetos"]).add(project_id)
+        project_label = _scholarship_allocation_project_label(row)
+        if project_label:
+            cast(set[str], total["projetos_nomes"]).add(project_label)
         institution = _institution_label(row)
         if institution:
             cast(set[str], total["instituicoes"]).add(institution)
@@ -1589,7 +1595,9 @@ def _scholarship_allocation_holder_summary_rows(
         {
             "bolsista": total["bolsista"],
             "projetos": len(cast(set[str], total["projetos"])),
+            "projetos_nomes": _join_labels(cast(set[str], total["projetos_nomes"])),
             "instituicoes": len(cast(set[str], total["instituicoes"])),
+            "instituicoes_nomes": _join_labels(cast(set[str], total["instituicoes"])),
             "bolsas_pagas": _int_value(total["bolsas_pagas"]),
             _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN: _money(
                 _decimal(total[_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN])
@@ -1599,6 +1607,28 @@ def _scholarship_allocation_holder_summary_rows(
             ),
         }
         for total in ordered_totals
+    ]
+
+
+def _scholarship_allocation_summary_table_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [
+        {
+            "Bolsista": row.get("bolsista", ""),
+            "Projetos": _int_value(row.get("projetos")),
+            "Nomes dos projetos": row.get("projetos_nomes", ""),
+            "Instituicoes": _int_value(row.get("instituicoes")),
+            "Instituicoes vinculadas": row.get("instituicoes_nomes", ""),
+            "Bolsas pagas": _int_value(row.get("bolsas_pagas")),
+            "Valor alocado": _currency_label(
+                row.get(_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN)
+            ),
+            "Valor pago": _currency_label(
+                row.get(_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN)
+            ),
+        }
+        for row in rows
     ]
 
 
@@ -1636,6 +1666,16 @@ def _scholarship_allocation_holder_key(row: Mapping[str, object]) -> str:
     holder_id = str(row.get("bolsista_pesquisador_id") or "").strip()
     holder_name = str(row.get("bolsista_pesquisador_nome") or "").strip()
     return holder_id or holder_name
+
+
+def _scholarship_allocation_project_label(row: Mapping[str, object]) -> str:
+    title = str(row.get("projeto_titulo") or "").strip()
+    project_id = str(row.get("projeto_id") or "").strip()
+    return title or project_id
+
+
+def _join_labels(labels: set[str]) -> str:
+    return "; ".join(sorted((label for label in labels if label), key=str.casefold))
 
 
 def _json_payload(rows: Sequence[Mapping[str, object]]) -> bytes:
