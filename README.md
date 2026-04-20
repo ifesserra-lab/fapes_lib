@@ -31,6 +31,76 @@ O projeto ja possui a fundacao inicial da biblioteca Python:
 - CI com testes, lint, format check e type check;
 - CD para publicacao no PyPI quando uma release passar nos checks.
 
+## Instalacao
+
+A biblioteca ainda nao foi publicada no PyPI. Enquanto isso, ela pode ser
+baixada diretamente pelo GitHub:
+
+- Repositorio: <https://github.com/ifesserra-lab/fapes_lib>
+- Download ZIP: <https://github.com/ifesserra-lab/fapes_lib/archive/refs/heads/main.zip>
+
+Instalacao com `pip` a partir do GitHub:
+
+```bash
+pip install "fapes-lib @ git+https://github.com/ifesserra-lab/fapes_lib.git@main"
+```
+
+Para desenvolvimento local:
+
+```bash
+git clone https://github.com/ifesserra-lab/fapes_lib.git
+cd fapes_lib
+pip install -e ".[dev]"
+```
+
+Para usar tambem o dashboard Streamlit:
+
+```bash
+pip install -e ".[dashboard]"
+```
+
+## Exemplo De Uso
+
+Configure as credenciais no ambiente ou em um arquivo `.env` local:
+
+```dotenv
+FAPES_AUTH_URL="https://servicos.fapes.es.gov.br/webServicesSig/auth.php"
+FAPES_USUARIO="..."
+FAPES_SENHA="..."
+```
+
+Consulta simples de editais:
+
+```python
+from fapes_lib.controllers import (
+    FapesApiClient,
+    FapesAuthenticator,
+    FapesQueryController,
+)
+from fapes_lib.infrastructure.http_client import FapesHttpClient
+from fapes_lib.settings import FapesSettings
+
+settings = FapesSettings.from_env()
+http_client = FapesHttpClient(
+    base_url=settings.base_url,
+    timeout=settings.timeout_seconds,
+)
+
+authenticator = FapesAuthenticator(settings=settings, http_client=http_client)
+token = authenticator.authenticate()
+
+query_controller = FapesQueryController(
+    http_client=http_client,
+    token=token.value,
+)
+api_client = FapesApiClient(query_controller=query_controller)
+
+editais = api_client.listar_editais()
+
+print(f"Editais encontrados: {editais.qtd}")
+print(editais.data[:3])
+```
+
 ## Documentacao
 
 Ponto de entrada da documentacao:
