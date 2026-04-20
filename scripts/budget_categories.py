@@ -201,9 +201,9 @@ def _readable_category(value: object) -> str:
     if "bolsa" in description:
         return "Bolsas"
     if "material de consumo" in description:
-        return "Material"
+        return "Material de consumo"
     if "equipamento" in description or "permanente" in description:
-        return "Capital"
+        return "Equipamentos e material permanente"
     if _contains_any(
         description,
         ("diária", "diaria", "passagem", "passagen", "hospedagem"),
@@ -214,7 +214,7 @@ def _readable_category(value: object) -> str:
         or "servico" in description
         or "pessoa jurídica" in description
     ):
-        return "Serviços"
+        return "Serviços de terceiros"
     if "pessoal" in description or "encargo" in description:
         return "Pessoal e encargos"
 

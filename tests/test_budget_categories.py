@@ -56,13 +56,13 @@ def test_budget_categories_group_budget_by_readable_category(
 
     assert rows == [
         {
-            "categoria_orcamento": "Capital",
+            "categoria_orcamento": "Equipamentos e material permanente",
             "orcamento_contratado": "2.000,00",
             "orcamento_contratado_valor": 2000.0,
             "total_lancamentos": 1,
         },
         {
-            "categoria_orcamento": "Material",
+            "categoria_orcamento": "Material de consumo",
             "orcamento_contratado": "1.000,00",
             "orcamento_contratado_valor": 1000.0,
             "total_lancamentos": 1,
@@ -74,7 +74,7 @@ def test_budget_categories_group_budget_by_readable_category(
             "total_lancamentos": 2,
         },
         {
-            "categoria_orcamento": "Serviços",
+            "categoria_orcamento": "Serviços de terceiros",
             "orcamento_contratado": "500,00",
             "orcamento_contratado_valor": 500.0,
             "total_lancamentos": 1,
@@ -166,13 +166,13 @@ def test_budget_categories_group_budget_by_researcher_query(
 
     assert rows == [
         {
-            "categoria_orcamento": "Capital",
+            "categoria_orcamento": "Equipamentos e material permanente",
             "orcamento_contratado": "2.000,00",
             "orcamento_contratado_valor": 2000.0,
             "total_lancamentos": 1,
         },
         {
-            "categoria_orcamento": "Material",
+            "categoria_orcamento": "Material de consumo",
             "orcamento_contratado": "1.000,00",
             "orcamento_contratado_valor": 1000.0,
             "total_lancamentos": 1,
@@ -233,7 +233,7 @@ def test_budget_categories_load_researcher_budget_items(
             "coordenador_nome": "Maria Silva",
             "instituicao_nome": "Universidade Federal do Espirito Santo",
             "instituicao_sigla": "UFES - VITÓRIA",
-            "categoria_orcamento": "Capital",
+            "categoria_orcamento": "Equipamentos e material permanente",
             "descricao_categoria": "Equipamentos e Material Permanente",
             "orcamento_contratado": "2.000,00",
             "orcamento_contratado_valor": 2000.0,
@@ -244,7 +244,7 @@ def test_budget_categories_load_researcher_budget_items(
             "coordenador_nome": "Maria Silva",
             "instituicao_nome": "Universidade Federal do Espirito Santo",
             "instituicao_sigla": "UFES - VITÓRIA",
-            "categoria_orcamento": "Material",
+            "categoria_orcamento": "Material de consumo",
             "descricao_categoria": "Material de Consumo",
             "orcamento_contratado": "1.000,00",
             "orcamento_contratado_valor": 1000.0,

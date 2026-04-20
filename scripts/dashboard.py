@@ -1115,6 +1115,15 @@ def _render_researcher_page(
         if budget_detail_frame.empty:
             st.info("Nenhuma rubrica de orcamento encontrada para o pesquisador.")
         else:
+            _bar_chart_with_total_labels(
+                st,
+                alt,
+                _chart_dataframe(pd, budget_detail_rows, _BUDGET_VALUE_COLUMN),
+                x=_BUDGET_CATEGORY_COLUMN,
+                y=_BUDGET_VALUE_COLUMN,
+                color="#6A4C93",
+                show_values=show_chart_values,
+            )
             _render_sortable_dataframe(st, budget_detail_frame)
 
     with detail_right:

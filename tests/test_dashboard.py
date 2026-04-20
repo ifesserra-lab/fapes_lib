@@ -1431,7 +1431,7 @@ def test_dashboard_builds_budget_detail_table_rows(
     dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
     rows = [
         {
-            "categoria_orcamento": "Material",
+            "categoria_orcamento": "Material de consumo",
             "orcamento_contratado": "1.234,50",
             "total_lancamentos": 2,
         }
@@ -1441,7 +1441,7 @@ def test_dashboard_builds_budget_detail_table_rows(
 
     assert table_rows == [
         {
-            "Rubrica": "Material",
+            "Rubrica": "Material de consumo",
             "Orcamento contratado": "R$ 1.234,50",
             "Lancamentos": 2,
         }
@@ -1459,7 +1459,7 @@ def test_dashboard_builds_budget_item_table_rows(
             "projeto_titulo": "Projeto da Maria",
             "instituicao_nome": "Universidade Federal do Espirito Santo",
             "instituicao_sigla": "UFES - VITÓRIA",
-            "categoria_orcamento": "Material",
+            "categoria_orcamento": "Material de consumo",
             "descricao_categoria": "Material de Consumo",
             "orcamento_contratado": "1.234,50",
         }
@@ -1473,7 +1473,7 @@ def test_dashboard_builds_budget_item_table_rows(
             "Projeto": "Projeto da Maria",
             "Instituicao": "Universidade Federal do Espirito Santo",
             "Sigla": "UFES - VITÓRIA",
-            "Rubrica": "Material",
+            "Rubrica": "Material de consumo",
             "Descricao": "Material de Consumo",
             "Orcamento contratado": "R$ 1.234,50",
         }
