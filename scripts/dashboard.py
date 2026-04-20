@@ -45,6 +45,7 @@ _SCHOLARSHIP_TYPE_COLUMN = "tipo_bolsa"
 _PROJECTS_COLUMN = "total_projetos"
 _FINANCIAL_VOLUME_TYPE_COLUMN = "tipo_volume_financeiro"
 _FINANCIAL_VOLUME_VALUE_COLUMN = "valor_financeiro"
+_RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN = "valor_total_bolsas"
 _UNKNOWN_INSTITUTION = "Sem informacao"
 _NO_MATCH_INSTITUTION_LABEL = "__sem_instituicao__"
 _TOOLTIP_FIELD_GROUPS: Final = (
@@ -437,13 +438,96 @@ def _render_summary_page(
         )
 
     with tab_researchers:
-        researcher_summary_frame = pd.DataFrame(
-            data.researcher_scholarship_summary_rows
+        scholarship_institution_options = _researcher_scholarship_institution_options(
+            data.researcher_scholarship_rows
         )
-        researcher_scholarship_frame = pd.DataFrame(data.researcher_scholarship_rows)
+        scholarship_type_options = _researcher_scholarship_type_options(
+            data.researcher_scholarship_rows
+        )
+        max_scholarship_value = _researcher_scholarship_max_value(
+            data.researcher_scholarship_rows
+        )
+        filter_columns = st.columns(4)
+        with filter_columns[0]:
+            selected_scholarship_institutions = st.multiselect(
+                "Instituicao",
+                options=scholarship_institution_options,
+                key="researcher_scholarship_institutions",
+            )
+        with filter_columns[1]:
+            selected_scholarship_types = st.multiselect(
+                "Tipo de bolsa",
+                options=scholarship_type_options,
+                key="researcher_scholarship_types",
+            )
+        with filter_columns[2]:
+            min_scholarship_value = float(
+                st.number_input(
+                    "Valor minimo",
+                    min_value=0.0,
+                    value=0.0,
+                    step=1000.0,
+                    format="%.2f",
+                    key="researcher_scholarship_min_value",
+                )
+            )
+        with filter_columns[3]:
+            max_scholarship_filter_value = float(
+                st.number_input(
+                    "Valor maximo",
+                    min_value=0.0,
+                    value=max_scholarship_value,
+                    step=1000.0,
+                    format="%.2f",
+                    key="researcher_scholarship_max_value",
+                )
+            )
+        researcher_top_n = st.slider(
+            "Top pesquisadores",
+            min_value=5,
+            max_value=50,
+            value=15,
+            key="researcher_scholarship_top_n",
+        )
+
+        filtered_scholarship_rows = _filter_researcher_scholarship_rows(
+            data.researcher_scholarship_rows,
+            selected_institutions=selected_scholarship_institutions,
+            selected_scholarship_types=selected_scholarship_types,
+            min_value=min_scholarship_value,
+            max_value=max_scholarship_filter_value,
+        )
+        filtered_summary_rows = summarize_researcher_scholarships(
+            filtered_scholarship_rows
+        )
+        known_summary_rows = _known_researcher_summary_rows(filtered_summary_rows)
+        unknown_summary_rows = _unknown_researcher_summary_rows(filtered_summary_rows)
+        researcher_summary_frame = pd.DataFrame(known_summary_rows)
+        researcher_scholarship_frame = pd.DataFrame(filtered_scholarship_rows)
+        unknown_researcher_frame = pd.DataFrame(unknown_summary_rows)
+
         if researcher_summary_frame.empty:
             st.info("Nenhuma bolsa encontrada para os filtros selecionados.")
         else:
+            st.subheader("Top pesquisadores por valor de bolsas")
+            top_researcher_rows = _top_researcher_scholarship_summary_rows(
+                known_summary_rows,
+                researcher_top_n,
+            )
+            _bar_chart_with_total_labels(
+                st,
+                alt,
+                _chart_dataframe(
+                    pd,
+                    top_researcher_rows,
+                    _RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN,
+                ),
+                x="pesquisador_nome",
+                y=_RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN,
+                color="#28666E",
+                show_values=show_chart_values,
+            )
+
             st.subheader("Resumo por pesquisador")
             st.dataframe(
                 researcher_summary_frame,
@@ -469,6 +553,22 @@ def _render_summary_page(
             file_name="relatorio_pesquisadores_bolsas.csv",
             mime="text/csv",
         )
+        if not unknown_researcher_frame.empty:
+            st.subheader("Auditoria de pesquisadores sem informacao")
+            st.dataframe(
+                unknown_researcher_frame,
+                use_container_width=True,
+                hide_index=True,
+            )
+            unknown_csv_payload = unknown_researcher_frame.to_csv(index=False).encode(
+                "utf-8"
+            )
+            st.download_button(
+                "Baixar pesquisadores sem informacao",
+                data=unknown_csv_payload,
+                file_name="pesquisadores_sem_informacao.csv",
+                mime="text/csv",
+            )
 
     with tab_audit:
         if audit_frame.empty:
@@ -1032,6 +1132,106 @@ def _researcher_name_rows(rows: Sequence[Mapping[str, object]]) -> list[ReportRo
     ]
 
 
+def _researcher_scholarship_institution_options(
+    rows: Sequence[Mapping[str, object]],
+) -> list[str]:
+    labels = {_institution_label(row) for row in rows}
+    return sorted((label for label in labels if label), key=str.casefold)
+
+
+def _researcher_scholarship_type_options(
+    rows: Sequence[Mapping[str, object]],
+) -> list[str]:
+    labels = {_researcher_scholarship_type_label(row) for row in rows}
+    return sorted((label for label in labels if label), key=str.casefold)
+
+
+def _filter_researcher_scholarship_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_institutions: Sequence[str] = (),
+    selected_scholarship_types: Sequence[str] = (),
+    min_value: float | None = None,
+    max_value: float | None = None,
+) -> list[ReportRow]:
+    selected_institution_set = set(selected_institutions)
+    selected_type_set = set(selected_scholarship_types)
+    minimum = _decimal(min_value) if min_value is not None else None
+    maximum = _decimal(max_value) if max_value is not None else None
+    filtered_rows: list[ReportRow] = []
+    for row in rows:
+        if (
+            selected_institution_set
+            and _institution_label(row) not in selected_institution_set
+        ):
+            continue
+        if (
+            selected_type_set
+            and _researcher_scholarship_type_label(row) not in selected_type_set
+        ):
+            continue
+        value = _decimal(row.get("valor_total"))
+        if minimum is not None and value < minimum:
+            continue
+        if maximum is not None and value > maximum:
+            continue
+        filtered_rows.append(dict(row))
+
+    return filtered_rows
+
+
+def _known_researcher_summary_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [dict(row) for row in rows if not _is_unknown_researcher(row)]
+
+
+def _unknown_researcher_summary_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [dict(row) for row in rows if _is_unknown_researcher(row)]
+
+
+def _top_researcher_scholarship_summary_rows(
+    rows: Sequence[Mapping[str, object]],
+    limit: int,
+) -> list[ReportRow]:
+    return sorted(
+        (dict(row) for row in rows),
+        key=lambda row: (
+            -_decimal(row.get(_RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN)),
+            str(row.get("pesquisador_nome", "")).casefold(),
+        ),
+    )[:limit]
+
+
+def _researcher_scholarship_max_value(
+    rows: Sequence[Mapping[str, object]],
+) -> float:
+    return float(
+        max(
+            (_decimal(row.get("valor_total")) for row in rows),
+            default=Decimal("0"),
+        )
+    )
+
+
+def _researcher_scholarship_type_label(row: Mapping[str, object]) -> str:
+    acronym = str(row.get("bolsa_sigla", "")).strip()
+    name = str(row.get("bolsa_nome", "")).strip()
+    if acronym and name and acronym != name:
+        return f"{acronym} | {name}"
+    return acronym or name
+
+
+def _is_unknown_researcher(row: Mapping[str, object]) -> bool:
+    researcher_name = str(row.get("pesquisador_nome", "")).strip()
+    if not researcher_name:
+        return True
+
+    return researcher_name == _UNKNOWN_INSTITUTION
+
+
 def _filter_researcher_project_rows(
     rows: Sequence[Mapping[str, object]],
     *,
@@ -1489,7 +1689,11 @@ def _chart_total_label(row: Mapping[str, object], y_column: str) -> str:
         return _short_currency_label(
             row.get(_SCHOLARSHIP_AMOUNT_COLUMN, row.get(y_column))
         )
-    if y_column in {_BUDGET_COLUMN, _SCHOLARSHIP_AMOUNT_COLUMN}:
+    if y_column in {
+        _BUDGET_COLUMN,
+        _SCHOLARSHIP_AMOUNT_COLUMN,
+        _RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN,
+    }:
         return _short_currency_label(row.get(y_column))
 
     return _number_label(_int_value(row.get(y_column)))
@@ -1501,6 +1705,7 @@ _FINANCIAL_CHART_COLUMNS: Final = frozenset(
         _BUDGET_VALUE_COLUMN,
         _SCHOLARSHIP_AMOUNT_COLUMN,
         _SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
+        _RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN,
     }
 )
 

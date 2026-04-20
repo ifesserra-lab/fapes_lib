@@ -236,6 +236,87 @@ def test_dashboard_loads_researcher_scholarship_exports(
     assert len(all_projects_data.researcher_scholarship_summary_rows) == 2
 
 
+def test_dashboard_filters_researcher_scholarships_for_analysis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    rows = [
+        {
+            "pesquisador_nome": "Maria Silva",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "bolsa_sigla": "ICT",
+            "bolsa_nome": "Iniciacao Cientifica",
+            "valor_total": "1.200,00",
+        },
+        {
+            "pesquisador_nome": "Joao Souza",
+            "instituicao_nome": "Instituto Federal do Espirito Santo",
+            "instituicao_sigla": "IFES",
+            "bolsa_sigla": "MSC",
+            "bolsa_nome": "Mestrado",
+            "valor_total": "3.000,00",
+        },
+        {
+            "pesquisador_nome": "Ana Costa",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "bolsa_sigla": "ICT",
+            "bolsa_nome": "Iniciacao Cientifica",
+            "valor_total": "500,00",
+        },
+    ]
+
+    institution_options = dashboard._researcher_scholarship_institution_options(rows)
+    type_options = dashboard._researcher_scholarship_type_options(rows)
+    filtered_rows = dashboard._filter_researcher_scholarship_rows(
+        rows,
+        selected_institutions=[
+            "Universidade Federal do Espirito Santo | UFES - VITÓRIA"
+        ],
+        selected_scholarship_types=["ICT | Iniciacao Cientifica"],
+        min_value=1000.0,
+        max_value=2000.0,
+    )
+
+    assert institution_options == [
+        "Instituto Federal do Espirito Santo | IFES",
+        "Universidade Federal do Espirito Santo | UFES - VITÓRIA",
+    ]
+    assert type_options == ["ICT | Iniciacao Cientifica", "MSC | Mestrado"]
+    assert filtered_rows == [rows[0]]
+
+
+def test_dashboard_splits_unknown_researchers_and_sorts_top_scholarship_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    rows = [
+        {
+            "pesquisador_nome": "Ana Costa",
+            "valor_total_bolsas": "5.000,00",
+        },
+        {
+            "pesquisador_nome": "Sem informacao",
+            "valor_total_bolsas": "50.000,00",
+        },
+        {
+            "pesquisador_nome": "Joao Souza",
+            "valor_total_bolsas": "7.500,00",
+        },
+    ]
+
+    known_rows = dashboard._known_researcher_summary_rows(rows)
+    unknown_rows = dashboard._unknown_researcher_summary_rows(rows)
+    top_rows = dashboard._top_researcher_scholarship_summary_rows(known_rows, 1)
+
+    assert known_rows == [rows[0], rows[2]]
+    assert unknown_rows == [rows[1]]
+    assert top_rows == [rows[2]]
+
+
 def test_dashboard_filters_and_sorts_rows_by_metric(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -488,6 +569,10 @@ def test_dashboard_builds_chart_rows_with_total_value_labels(
         rows,
         "orcamento_contratado_valor",
     )
+    researcher_scholarship_rows = dashboard._chart_rows_with_labels(
+        [{"pesquisador_nome": "Maria Silva", "valor_total_bolsas": "1.200,00"}],
+        "valor_total_bolsas",
+    )
 
     assert budget_rows[0]["valor_total"] == "R$ 782,6 mi"
     assert budget_rows[0]["orcamento_contratado"] == 782561708.7
@@ -499,6 +584,8 @@ def test_dashboard_builds_chart_rows_with_total_value_labels(
     assert scholarship_amount_rows[0]["valor_bolsas_tooltip"] == ("R$ 1.125.781.121,20")
     assert timeline_scholarship_amount_rows[0]["valor_total"] == "R$ 1,1 bi"
     assert timeline_budget_rows[0]["valor_total"] == "R$ 782,6 mi"
+    assert researcher_scholarship_rows[0]["valor_total"] == "R$ 1,2 mil"
+    assert researcher_scholarship_rows[0]["valor_total_bolsas"] == 1200.0
 
 
 def test_dashboard_builds_researcher_financial_timeline_rows(
