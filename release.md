@@ -36,6 +36,40 @@ Enquanto a lib estiver em `0.x`, a API publica ainda podera mudar entre releases
 
 ## Releases
 
+### dashboard-instituicoes-local-20260420 - Dashboard De Instituicoes Por Local
+
+Status: publicada como GitHub Release tecnica.
+
+Data: 2026-04-20
+
+Tipo: dashboard, relatorios e analise exploratoria.
+
+Tag:
+
+- `dashboard-instituicoes-local-20260420`
+
+Changelog:
+
+- Adicionado dashboard Streamlit para analisar projetos FAPES por instituicao,
+  local, pesquisador e bolsistas alocados.
+- Adicionada pagina `Instituicoes por local` com filtros separados por
+  instituicao e local, sem repetir nomes nas listas.
+- Adicionado relatorio JSON agrupando projetos por instituicao e por local,
+  incluindo projetos, rubricas do orcamento contratado, tipos de bolsa e
+  bolsistas do projeto.
+- Adicionados downloads CSV nas abas de instituicoes por local.
+- Adicionados filtros por rubrica, tipo de bolsa, bolsista e status do projeto.
+- Adicionada documentacao informando que `downloads/` contem dados gerados
+  localmente e nao deve ser versionado.
+- Alterado workflow de publicacao para publicar no PyPI apenas releases com tag
+  iniciada por `v`, evitando publicar marcos tecnicos do dashboard.
+
+Observacoes:
+
+- Esta release tecnica nao altera a versao Python `0.0.0`.
+- Esta release nao deve publicar pacote no PyPI.
+- Os dados da pasta `downloads/` permanecem locais e ignorados pelo Git.
+
 ### 0.0.0 - Bootstrap De Planejamento
 
 Status: concluida como base documental do repositorio.
