@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
@@ -31,6 +32,7 @@ from scripts.scholarship_details import load_scholarship_details
 ReportRow: TypeAlias = dict[str, object]
 
 _DEFAULT_INPUT_DIR: Final = Path("downloads/projetos_por_edital")
+_DEFAULT_SCHOLARSHIP_ALLOCATIONS_JSON_NAME: Final = "relatorio_alocacao_bolsas.json"
 _DEFAULT_TOP_N: Final = 15
 _BUDGET_CATEGORY_COLUMN = "categoria_orcamento"
 _BUDGET_COLUMN = "orcamento_contratado"
@@ -46,6 +48,8 @@ _PROJECTS_COLUMN = "total_projetos"
 _FINANCIAL_VOLUME_TYPE_COLUMN = "tipo_volume_financeiro"
 _FINANCIAL_VOLUME_VALUE_COLUMN = "valor_financeiro"
 _RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN = "valor_total_bolsas"
+_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN = "valor_alocado_total"
+_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN = "valor_pago_total"
 _UNKNOWN_INSTITUTION = "Sem informacao"
 _NO_MATCH_INSTITUTION_LABEL = "__sem_instituicao__"
 _TOOLTIP_FIELD_GROUPS: Final = (
@@ -66,6 +70,7 @@ class DashboardData:
     excluded_project_rows: list[ReportRow]
     researcher_scholarship_rows: list[ReportRow]
     researcher_scholarship_summary_rows: list[ReportRow]
+    scholarship_allocation_rows: list[ReportRow]
     total_institutions: int
     total_projects: int
     total_scholarships: int
@@ -82,11 +87,22 @@ class DashboardTotals:
     total_budget: str
 
 
+@dataclass(frozen=True, slots=True)
+class ScholarshipAllocationTotals:
+    total_holders: int
+    total_projects: int
+    total_institutions: int
+    total_paid_scholarships: int
+    total_allocated_amount: str
+    total_paid_amount: str
+
+
 def load_dashboard_data(
     input_dir: str | Path = _DEFAULT_INPUT_DIR,
     *,
     include_excluded_projects: bool = False,
     selected_statuses: Sequence[str] = (),
+    scholarship_allocations_path: str | Path | None = None,
 ) -> DashboardData:
     """Load aggregated dashboard data from downloaded edital project JSON files."""
 
@@ -112,6 +128,12 @@ def load_dashboard_data(
     researcher_scholarship_summary_rows = summarize_researcher_scholarships(
         researcher_scholarship_rows
     )
+    scholarship_allocation_rows = load_scholarship_allocation_rows(
+        path,
+        allocation_path=scholarship_allocations_path,
+        include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
+    )
     totals = _summary_totals(rows)
 
     return DashboardData(
@@ -122,12 +144,54 @@ def load_dashboard_data(
         excluded_project_rows=excluded_project_rows,
         researcher_scholarship_rows=researcher_scholarship_rows,
         researcher_scholarship_summary_rows=researcher_scholarship_summary_rows,
+        scholarship_allocation_rows=scholarship_allocation_rows,
         total_institutions=totals.total_institutions,
         total_projects=totals.total_projects,
         total_scholarships=totals.total_scholarships,
         total_scholarship_amount=totals.total_scholarship_amount,
         total_budget=totals.total_budget,
     )
+
+
+def load_scholarship_allocation_rows(
+    input_dir: str | Path = _DEFAULT_INPUT_DIR,
+    *,
+    allocation_path: str | Path | None = None,
+    include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
+) -> list[ReportRow]:
+    """Load real scholarship-holder allocations exported by scripts/report.py."""
+
+    path = (
+        Path(allocation_path)
+        if allocation_path is not None
+        else _default_scholarship_allocations_path(input_dir)
+    )
+    if not path.exists():
+        return []
+
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(payload, list):
+        return []
+
+    rows: list[ReportRow] = []
+    for item in payload:
+        if not isinstance(item, Mapping):
+            continue
+        row = dict(item)
+        if _should_skip_scholarship_allocation_row(
+            row,
+            include_excluded_projects=include_excluded_projects,
+            selected_statuses=selected_statuses,
+        ):
+            continue
+        rows.append(row)
+
+    return rows
 
 
 def filter_rows(rows: Sequence[Mapping[str, object]], query: str) -> list[ReportRow]:
@@ -205,13 +269,24 @@ def run_app() -> None:
         st.header("Navegacao")
         page_label = st.radio(
             "Pagina",
-            options=("Resumo", "Detalhes da instituicao", "Projetos por pesquisador"),
+            options=(
+                "Resumo",
+                "Detalhes da instituicao",
+                "Projetos por pesquisador",
+                "Bolsistas alocados",
+            ),
         )
         st.header("Dados")
         input_dir = Path(
             st.text_input(
                 "Diretorio dos JSONs",
                 value=str(_DEFAULT_INPUT_DIR),
+            )
+        )
+        scholarship_allocations_path = Path(
+            st.text_input(
+                "JSON de bolsistas",
+                value=str(_default_scholarship_allocations_path(input_dir)),
             )
         )
         show_chart_values = bool(
@@ -240,6 +315,7 @@ def run_app() -> None:
         input_dir,
         include_excluded_projects=include_excluded_projects,
         selected_statuses=selected_project_statuses,
+        scholarship_allocations_path=scholarship_allocations_path,
     )
     if not data.institution_rows:
         st.warning(f"Nenhum JSON encontrado em {data.input_dir}.")
@@ -266,6 +342,17 @@ def run_app() -> None:
             data.input_dir,
             include_excluded_projects=include_excluded_projects,
             selected_statuses=selected_project_statuses,
+            show_chart_values=show_chart_values,
+        )
+        return
+
+    if page_label == "Bolsistas alocados":
+        _render_scholarship_allocations_page(
+            st,
+            pd,
+            alt,
+            data.scholarship_allocation_rows,
+            scholarship_allocations_path,
             show_chart_values=show_chart_values,
         )
         return
@@ -985,6 +1072,109 @@ def _render_researcher_page(
     )
 
 
+def _render_scholarship_allocations_page(
+    st: Any,
+    pd: Any,
+    alt: Any,
+    rows: Sequence[Mapping[str, object]],
+    allocation_path: Path,
+    *,
+    show_chart_values: bool,
+) -> None:
+    st.header("Bolsistas alocados")
+    st.caption(f"Dados carregados de {allocation_path}.")
+    if not rows:
+        st.info("Gere o arquivo relatorio_alocacao_bolsas.json para ver os bolsistas.")
+        return
+
+    with st.sidebar:
+        st.header("Filtros dos bolsistas")
+        allocation_query = st.text_input("Buscar bolsista, projeto ou responsavel")
+        selected_institutions = st.multiselect(
+            "Instituicao",
+            options=_scholarship_allocation_institution_options(rows),
+            key="scholarship_allocation_institutions",
+        )
+        selected_scholarship_types = st.multiselect(
+            "Tipo de bolsa",
+            options=_scholarship_allocation_type_options(rows),
+            key="scholarship_allocation_types",
+        )
+        top_n = st.slider(
+            "Top bolsistas",
+            min_value=5,
+            max_value=50,
+            value=15,
+            key="scholarship_allocation_top_n",
+        )
+
+    filtered_rows = _filter_scholarship_allocation_rows(
+        rows,
+        selected_institutions=selected_institutions,
+        selected_scholarship_types=selected_scholarship_types,
+        query=allocation_query,
+    )
+    totals = _scholarship_allocation_totals(filtered_rows)
+
+    metric_columns = st.columns(6)
+    metric_columns[0].metric("Bolsistas", totals.total_holders)
+    metric_columns[1].metric("Projetos", totals.total_projects)
+    metric_columns[2].metric("Instituicoes", totals.total_institutions)
+    metric_columns[3].metric("Bolsas pagas", totals.total_paid_scholarships)
+    metric_columns[4].metric(
+        "Valor alocado",
+        _currency_label(totals.total_allocated_amount),
+    )
+    metric_columns[5].metric("Valor pago", _currency_label(totals.total_paid_amount))
+
+    if not filtered_rows:
+        st.warning("Nenhum bolsista encontrado para os filtros selecionados.")
+        return
+
+    summary_rows = _scholarship_allocation_holder_summary_rows(filtered_rows)
+    table_rows = _scholarship_allocation_table_rows(filtered_rows)
+    summary_frame = pd.DataFrame(summary_rows)
+    table_frame = pd.DataFrame(table_rows)
+    tab_summary, tab_table = st.tabs(["Resumo", "Tabela"])
+
+    with tab_summary:
+        st.subheader("Top bolsistas por valor pago")
+        _bar_chart_with_total_labels(
+            st,
+            alt,
+            _chart_dataframe(
+                pd,
+                top_rows(
+                    summary_rows,
+                    _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
+                    top_n,
+                ),
+                _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
+            ),
+            x="bolsista",
+            y=_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
+            color="#28666E",
+            show_values=show_chart_values,
+        )
+        st.dataframe(summary_frame, use_container_width=True, hide_index=True)
+
+    with tab_table:
+        st.dataframe(table_frame, use_container_width=True, hide_index=True)
+        csv_payload = table_frame.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Baixar CSV de bolsistas",
+            data=csv_payload,
+            file_name="relatorio_alocacao_bolsas.csv",
+            mime="text/csv",
+        )
+        st.download_button(
+            "Baixar JSON de bolsistas",
+            data=_json_payload(filtered_rows),
+            file_name="relatorio_alocacao_bolsas.json",
+            mime="application/json",
+        )
+
+
 def _institution_detail_tabs() -> list[str]:
     return [
         "Orcamentos",
@@ -1222,6 +1412,234 @@ def _researcher_scholarship_type_label(row: Mapping[str, object]) -> str:
     if acronym and name and acronym != name:
         return f"{acronym} | {name}"
     return acronym or name
+
+
+def _default_scholarship_allocations_path(input_dir: str | Path) -> Path:
+    return Path(input_dir).parent / _DEFAULT_SCHOLARSHIP_ALLOCATIONS_JSON_NAME
+
+
+def _should_skip_scholarship_allocation_row(
+    row: Mapping[str, object],
+    *,
+    include_excluded_projects: bool,
+    selected_statuses: Sequence[str],
+) -> bool:
+    if not include_excluded_projects and _is_not_contracted_project_status(
+        row.get("situacao_descricao")
+    ):
+        return True
+
+    statuses = {status.strip() for status in selected_statuses if status.strip()}
+    return bool(statuses) and str(row.get("situacao_descricao", "")).strip() not in (
+        statuses
+    )
+
+
+def _scholarship_allocation_institution_options(
+    rows: Sequence[Mapping[str, object]],
+) -> list[str]:
+    labels = {_institution_label(row) for row in rows}
+    return sorted((label for label in labels if label), key=str.casefold)
+
+
+def _scholarship_allocation_type_options(
+    rows: Sequence[Mapping[str, object]],
+) -> list[str]:
+    labels = {_scholarship_allocation_type_label(row) for row in rows}
+    return sorted((label for label in labels if label), key=str.casefold)
+
+
+def _filter_scholarship_allocation_rows(
+    rows: Sequence[Mapping[str, object]],
+    *,
+    selected_institutions: Sequence[str] = (),
+    selected_scholarship_types: Sequence[str] = (),
+    query: str = "",
+) -> list[ReportRow]:
+    selected_institution_set = set(selected_institutions)
+    selected_type_set = set(selected_scholarship_types)
+    filtered_rows: list[ReportRow] = []
+    for row in rows:
+        if (
+            selected_institution_set
+            and _institution_label(row) not in selected_institution_set
+        ):
+            continue
+        if (
+            selected_type_set
+            and _scholarship_allocation_type_label(row) not in selected_type_set
+        ):
+            continue
+        if query and not _scholarship_allocation_matches_query(row, query):
+            continue
+        filtered_rows.append(dict(row))
+
+    return filtered_rows
+
+
+def _scholarship_allocation_totals(
+    rows: Sequence[Mapping[str, object]],
+) -> ScholarshipAllocationTotals:
+    holder_keys = {_scholarship_allocation_holder_key(row) for row in rows}
+    project_keys = {
+        str(row.get("projeto_id") or "").strip()
+        for row in rows
+        if str(row.get("projeto_id") or "").strip()
+    }
+    institution_labels = {_institution_label(row) for row in rows}
+    allocated_amount = sum(
+        (
+            _decimal(row.get(_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN))
+            for row in rows
+        ),
+        Decimal("0"),
+    )
+    paid_amount = sum(
+        (_decimal(row.get(_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN)) for row in rows),
+        Decimal("0"),
+    )
+
+    return ScholarshipAllocationTotals(
+        total_holders=len({key for key in holder_keys if key}),
+        total_projects=len(project_keys),
+        total_institutions=len({label for label in institution_labels if label}),
+        total_paid_scholarships=sum(
+            _int_value(row.get("qtd_bolsas_paga")) for row in rows
+        ),
+        total_allocated_amount=_money(allocated_amount),
+        total_paid_amount=_money(paid_amount),
+    )
+
+
+def _scholarship_allocation_table_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [
+        {
+            "Bolsista": row.get("bolsista_pesquisador_nome", ""),
+            "Projeto ID": row.get("projeto_id", ""),
+            "Projeto": row.get("projeto_titulo", ""),
+            "Responsavel": row.get("coordenador_nome", ""),
+            "Instituicao": row.get("instituicao_nome", ""),
+            "Sigla": row.get("instituicao_sigla", ""),
+            "Tipo bolsa": _scholarship_allocation_type_label(row),
+            "Nivel": row.get("bolsa_nivel_nome", ""),
+            "Inicio": row.get("formulario_bolsa_inicio", ""),
+            "Termino": row.get("formulario_bolsa_termino", ""),
+            "Situacao": row.get("situacao_descricao", ""),
+            "Bolsas pagas": _int_value(row.get("qtd_bolsas_paga")),
+            "Valor alocado": _currency_label(
+                row.get(_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN)
+            ),
+            "Pagamentos": _int_value(row.get("pagamentos")),
+            "Valor pago": _currency_label(
+                row.get(_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN)
+            ),
+        }
+        for row in rows
+    ]
+
+
+def _scholarship_allocation_holder_summary_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    totals: dict[str, dict[str, object]] = {}
+    for row in rows:
+        holder_key = _scholarship_allocation_holder_key(row)
+        holder_name = str(
+            row.get("bolsista_pesquisador_nome") or _UNKNOWN_INSTITUTION
+        ).strip()
+        if not holder_name:
+            holder_name = _UNKNOWN_INSTITUTION
+        if holder_key not in totals:
+            totals[holder_key] = {
+                "bolsista": holder_name,
+                "projetos": set(),
+                "instituicoes": set(),
+                "bolsas_pagas": 0,
+                _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN: Decimal("0"),
+                _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN: Decimal("0"),
+            }
+
+        total = totals[holder_key]
+        project_id = str(row.get("projeto_id") or "").strip()
+        if project_id:
+            cast(set[str], total["projetos"]).add(project_id)
+        institution = _institution_label(row)
+        if institution:
+            cast(set[str], total["instituicoes"]).add(institution)
+        total["bolsas_pagas"] = _int_value(total["bolsas_pagas"]) + _int_value(
+            row.get("qtd_bolsas_paga")
+        )
+        total[_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN] = _decimal(
+            total[_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN]
+        ) + _decimal(row.get(_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN))
+        total[_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN] = _decimal(
+            total[_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN]
+        ) + _decimal(row.get(_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN))
+
+    ordered_totals = sorted(
+        totals.values(),
+        key=lambda total: (
+            -_decimal(total[_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN]),
+            str(total["bolsista"]).casefold(),
+        ),
+    )
+    return [
+        {
+            "bolsista": total["bolsista"],
+            "projetos": len(cast(set[str], total["projetos"])),
+            "instituicoes": len(cast(set[str], total["instituicoes"])),
+            "bolsas_pagas": _int_value(total["bolsas_pagas"]),
+            _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN: _money(
+                _decimal(total[_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN])
+            ),
+            _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN: _money(
+                _decimal(total[_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN])
+            ),
+        }
+        for total in ordered_totals
+    ]
+
+
+def _scholarship_allocation_matches_query(
+    row: Mapping[str, object],
+    query: str,
+) -> bool:
+    normalized_query = query.casefold().strip()
+    if not normalized_query:
+        return True
+
+    searchable_values = (
+        row.get("bolsista_pesquisador_nome"),
+        row.get("projeto_id"),
+        row.get("projeto_titulo"),
+        row.get("coordenador_nome"),
+        row.get("instituicao_nome"),
+        row.get("instituicao_sigla"),
+        row.get("situacao_descricao"),
+    )
+    return any(
+        normalized_query in str(value or "").casefold() for value in searchable_values
+    )
+
+
+def _scholarship_allocation_type_label(row: Mapping[str, object]) -> str:
+    acronym = str(row.get("bolsa_sigla", "")).strip()
+    name = str(row.get("bolsa_nome", "")).strip()
+    if acronym and name and acronym != name:
+        return f"{acronym} | {name}"
+    return acronym or name
+
+
+def _scholarship_allocation_holder_key(row: Mapping[str, object]) -> str:
+    holder_id = str(row.get("bolsista_pesquisador_id") or "").strip()
+    holder_name = str(row.get("bolsista_pesquisador_nome") or "").strip()
+    return holder_id or holder_name
+
+
+def _json_payload(rows: Sequence[Mapping[str, object]]) -> bytes:
+    return f"{json.dumps(list(rows), ensure_ascii=False, indent=2)}\n".encode()
 
 
 def _is_unknown_researcher(row: Mapping[str, object]) -> bool:
@@ -1693,6 +2111,8 @@ def _chart_total_label(row: Mapping[str, object], y_column: str) -> str:
         _BUDGET_COLUMN,
         _SCHOLARSHIP_AMOUNT_COLUMN,
         _RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN,
+        _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN,
+        _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
     }:
         return _short_currency_label(row.get(y_column))
 
@@ -1706,6 +2126,8 @@ _FINANCIAL_CHART_COLUMNS: Final = frozenset(
         _SCHOLARSHIP_AMOUNT_COLUMN,
         _SCHOLARSHIP_AMOUNT_VALUE_COLUMN,
         _RESEARCHER_SCHOLARSHIP_TOTAL_COLUMN,
+        _SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN,
+        _SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN,
     }
 )
 

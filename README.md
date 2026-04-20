@@ -174,6 +174,11 @@ pip install -e ".[dashboard]"
 streamlit run scripts/dashboard.py
 ```
 
+No dashboard, a pagina `Bolsistas alocados` usa
+`downloads/relatorio_alocacao_bolsas.json` para analisar bolsistas, projetos,
+valores alocados e valores pagos, alem de permitir baixar o recorte filtrado em
+CSV ou JSON.
+
 ## Logging
 
 A biblioteca usa o modulo `logging` da biblioteca padrao e nao configura handlers

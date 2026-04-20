@@ -236,6 +236,187 @@ def test_dashboard_loads_researcher_scholarship_exports(
     assert len(all_projects_data.researcher_scholarship_summary_rows) == 2
 
 
+def test_dashboard_loads_scholarship_allocation_json_exports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    input_dir = tmp_path / "projetos_por_edital"
+    input_dir.mkdir()
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                projeto_id="101",
+                coordenador_nome="Maria Silva",
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[],
+                orcamento=[{"valor_categoria": "150"}],
+                situacao_descricao="Projeto Em Andamento",
+            )
+        ],
+    )
+    allocation_file = tmp_path / "relatorio_alocacao_bolsas.json"
+    allocation_file.write_text(
+        json.dumps(
+            [
+                {
+                    "arquivo_origem": "edital_1_projetos.json",
+                    "projeto_id": "101",
+                    "projeto_titulo": "Projeto com bolsista",
+                    "situacao_descricao": "Projeto Em Andamento",
+                    "coordenador_nome": "Maria Silva",
+                    "instituicao_nome": "Universidade Federal do Espirito Santo",
+                    "instituicao_sigla": "UFES - VITÓRIA",
+                    "bolsista_pesquisador_id": "501",
+                    "bolsista_pesquisador_nome": "Aluno Bolsista",
+                    "bolsa_sigla": "ICT",
+                    "bolsa_nome": "Iniciacao Cientifica",
+                    "bolsa_nivel_nome": "ICT",
+                    "qtd_bolsas_paga": 2,
+                    "valor_alocado_total": "1.400,00",
+                    "pagamentos": 2,
+                    "valor_pago_total": "1.400,50",
+                },
+                {
+                    "arquivo_origem": "edital_1_projetos.json",
+                    "projeto_id": "102",
+                    "projeto_titulo": "Projeto nao contratado",
+                    "situacao_descricao": "Projeto Não Contratado",
+                    "coordenador_nome": "Joao Souza",
+                    "instituicao_nome": "Instituto Federal do Espirito Santo",
+                    "instituicao_sigla": "IFES",
+                    "bolsista_pesquisador_id": "502",
+                    "bolsista_pesquisador_nome": "Outro Bolsista",
+                    "bolsa_sigla": "MSC",
+                    "bolsa_nome": "Mestrado",
+                    "bolsa_nivel_nome": "MSC",
+                    "qtd_bolsas_paga": 4,
+                    "valor_alocado_total": "4.000,00",
+                    "pagamentos": 4,
+                    "valor_pago_total": "4.000,00",
+                },
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    data = dashboard.load_dashboard_data(input_dir)
+    all_projects_data = dashboard.load_dashboard_data(
+        input_dir,
+        include_excluded_projects=True,
+    )
+    filtered_data = dashboard.load_dashboard_data(
+        input_dir,
+        include_excluded_projects=True,
+        selected_statuses=["Projeto Não Contratado"],
+    )
+
+    assert [row["projeto_id"] for row in data.scholarship_allocation_rows] == ["101"]
+    assert [
+        row["projeto_id"] for row in all_projects_data.scholarship_allocation_rows
+    ] == [
+        "101",
+        "102",
+    ]
+    assert [row["projeto_id"] for row in filtered_data.scholarship_allocation_rows] == [
+        "102"
+    ]
+
+
+def test_dashboard_filters_and_summarizes_scholarship_allocations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    rows = [
+        {
+            "projeto_id": "101",
+            "projeto_titulo": "Projeto com bolsista",
+            "situacao_descricao": "Projeto Em Andamento",
+            "coordenador_nome": "Maria Silva",
+            "instituicao_nome": "Universidade Federal do Espirito Santo",
+            "instituicao_sigla": "UFES - VITÓRIA",
+            "bolsista_pesquisador_id": "501",
+            "bolsista_pesquisador_nome": "Aluno Bolsista",
+            "bolsa_sigla": "ICT",
+            "bolsa_nome": "Iniciacao Cientifica",
+            "bolsa_nivel_nome": "ICT",
+            "formulario_bolsa_inicio": "01/02/2024",
+            "formulario_bolsa_termino": "01/02/2025",
+            "qtd_bolsas_paga": 2,
+            "valor_alocado_total": "1.400,00",
+            "pagamentos": 2,
+            "valor_pago_total": "1.400,50",
+        },
+        {
+            "projeto_id": "102",
+            "projeto_titulo": "Outro projeto",
+            "situacao_descricao": "Projeto Em Andamento",
+            "coordenador_nome": "Joao Souza",
+            "instituicao_nome": "Instituto Federal do Espirito Santo",
+            "instituicao_sigla": "IFES",
+            "bolsista_pesquisador_id": "502",
+            "bolsista_pesquisador_nome": "Outro Bolsista",
+            "bolsa_sigla": "MSC",
+            "bolsa_nome": "Mestrado",
+            "bolsa_nivel_nome": "MSC",
+            "formulario_bolsa_inicio": "01/03/2024",
+            "formulario_bolsa_termino": "01/03/2025",
+            "qtd_bolsas_paga": 4,
+            "valor_alocado_total": "4.000,00",
+            "pagamentos": 4,
+            "valor_pago_total": "4.000,00",
+        },
+    ]
+
+    institution_options = dashboard._scholarship_allocation_institution_options(rows)
+    scholarship_type_options = dashboard._scholarship_allocation_type_options(rows)
+    filtered_rows = dashboard._filter_scholarship_allocation_rows(
+        rows,
+        selected_institutions=[
+            "Universidade Federal do Espirito Santo | UFES - VITÓRIA"
+        ],
+        selected_scholarship_types=["ICT | Iniciacao Cientifica"],
+        query="aluno",
+    )
+    totals = dashboard._scholarship_allocation_totals(filtered_rows)
+    table_rows = dashboard._scholarship_allocation_table_rows(filtered_rows)
+
+    assert institution_options == [
+        "Instituto Federal do Espirito Santo | IFES",
+        "Universidade Federal do Espirito Santo | UFES - VITÓRIA",
+    ]
+    assert scholarship_type_options == ["ICT | Iniciacao Cientifica", "MSC | Mestrado"]
+    assert totals.total_holders == 1
+    assert totals.total_projects == 1
+    assert totals.total_paid_scholarships == 2
+    assert totals.total_allocated_amount == "1.400,00"
+    assert totals.total_paid_amount == "1.400,50"
+    assert table_rows == [
+        {
+            "Bolsista": "Aluno Bolsista",
+            "Projeto ID": "101",
+            "Projeto": "Projeto com bolsista",
+            "Responsavel": "Maria Silva",
+            "Instituicao": "Universidade Federal do Espirito Santo",
+            "Sigla": "UFES - VITÓRIA",
+            "Tipo bolsa": "ICT | Iniciacao Cientifica",
+            "Nivel": "ICT",
+            "Inicio": "01/02/2024",
+            "Termino": "01/02/2025",
+            "Situacao": "Projeto Em Andamento",
+            "Bolsas pagas": 2,
+            "Valor alocado": "R$ 1.400,00",
+            "Pagamentos": 2,
+            "Valor pago": "R$ 1.400,50",
+        }
+    ]
+
+
 def test_dashboard_filters_researcher_scholarships_for_analysis(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
