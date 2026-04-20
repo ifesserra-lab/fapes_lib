@@ -61,6 +61,8 @@ Changelog:
 - Adicionados filtros por rubrica, tipo de bolsa, bolsista e status do projeto.
 - Adicionada documentacao informando que `downloads/` contem dados gerados
   localmente e nao deve ser versionado.
+- Alteradas dependencias de desenvolvimento para incluir a pilha do dashboard,
+  garantindo que testes com `pandas` rodem no CI limpo.
 - Alterado workflow de publicacao para publicar no PyPI apenas releases com tag
   iniciada por `v`, evitando publicar marcos tecnicos do dashboard.
 
