@@ -148,6 +148,81 @@ def test_scholarship_details_load_all_institutions_when_no_filter_is_selected(
     ]
 
 
+def test_scholarship_details_group_scholarships_by_researcher_query(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    scholarship_details = cast(
+        Any,
+        importlib.import_module("scripts.scholarship_details"),
+    )
+    input_dir = tmp_path / "projetos_por_edital"
+    input_dir.mkdir()
+    _write_project_file(
+        input_dir / "edital_1_projetos.json",
+        [
+            _project(
+                coordenador_nome="Maria Silva",
+                instituicao_nome="Universidade Federal do Espirito Santo",
+                instituicao_sigla="UFES - VITÓRIA",
+                bolsas=[
+                    {
+                        "sigla": "ICT",
+                        "nome": "Iniciacao Cientifica",
+                        "orcamento_quantidade": "2",
+                        "vlrtot": "1200",
+                    },
+                    {
+                        "sigla": "MSC",
+                        "nome": "Mestrado",
+                        "orcamento_quantidade": "1",
+                        "orcamento_custo": "500",
+                        "orcamento_duracao": "2",
+                    },
+                ],
+            ),
+            _project(
+                coordenador_nome="Joao Souza",
+                instituicao_nome="Instituto Federal do Espirito Santo",
+                instituicao_sigla="IFES",
+                bolsas=[
+                    {
+                        "sigla": "ICT",
+                        "nome": "Iniciacao Cientifica",
+                        "orcamento_quantidade": "10",
+                        "vlrtot": "9999",
+                    }
+                ],
+            ),
+        ],
+    )
+
+    rows = scholarship_details.load_researcher_scholarship_details(
+        input_dir,
+        "maria",
+    )
+
+    assert rows == [
+        {
+            "tipo_bolsa": "ICT",
+            "nome_bolsa": "Iniciacao Cientifica",
+            "quantidade_bolsas": 2,
+            "valor_bolsas": "1.200,00",
+            "valor_bolsas_valor": 1200.0,
+            "total_lancamentos": 1,
+        },
+        {
+            "tipo_bolsa": "MSC",
+            "nome_bolsa": "Mestrado",
+            "quantidade_bolsas": 1,
+            "valor_bolsas": "1.000,00",
+            "valor_bolsas_valor": 1000.0,
+            "total_lancamentos": 1,
+        },
+    ]
+
+
 def test_scholarship_details_exclude_not_contracted_projects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -245,12 +320,14 @@ def _write_project_file(path: Path, projetos: list[dict[str, object]]) -> None:
 
 def _project(
     *,
+    coordenador_nome: str = "",
     instituicao_nome: str,
     instituicao_sigla: str,
     bolsas: list[dict[str, str]],
     situacao_descricao: str = "Projeto aprovado",
 ) -> dict[str, object]:
     return {
+        "coordenador_nome": coordenador_nome,
         "situacao_descricao": situacao_descricao,
         "dados_coordenador": {
             "data": [

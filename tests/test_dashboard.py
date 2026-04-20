@@ -1424,6 +1424,30 @@ def test_dashboard_builds_scholarship_detail_table_rows(
     ]
 
 
+def test_dashboard_builds_budget_detail_table_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1]))
+    dashboard = cast(Any, importlib.import_module("scripts.dashboard"))
+    rows = [
+        {
+            "categoria_orcamento": "Material",
+            "orcamento_contratado": "1.234,50",
+            "total_lancamentos": 2,
+        }
+    ]
+
+    table_rows = dashboard._budget_detail_table_rows(rows)
+
+    assert table_rows == [
+        {
+            "Rubrica": "Material",
+            "Orcamento contratado": "R$ 1.234,50",
+            "Lancamentos": 2,
+        }
+    ]
+
+
 class _FakeColumnConfig:
     @staticmethod
     def NumberColumn(label: str, *, format: str) -> dict[str, str]:

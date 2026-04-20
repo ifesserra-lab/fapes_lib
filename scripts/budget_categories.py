@@ -87,6 +87,54 @@ def load_budget_categories(
     ]
 
 
+def load_researcher_budget_categories(
+    input_dir: str | Path,
+    researcher_query: str,
+    *,
+    include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
+) -> list[BudgetCategoryRow]:
+    """Aggregate contracted budget categories for researcher/coordinator projects."""
+
+    normalized_query = researcher_query.casefold().strip()
+    if not normalized_query:
+        return []
+
+    totals: dict[str, BudgetCategoryTotals] = {}
+    for path in sorted(Path(input_dir).glob("*.json")):
+        for projeto in _projects_from_file(path):
+            if _should_skip_project(
+                projeto,
+                include_excluded_projects,
+                selected_statuses,
+            ):
+                continue
+            if (
+                normalized_query
+                not in _text(projeto.get("coordenador_nome")).casefold()
+            ):
+                continue
+
+            for item in _envelope_records(projeto.get("orcamento_contratado")):
+                category = _readable_category(item.get("descricao_categoria"))
+                if category not in totals:
+                    totals[category] = BudgetCategoryTotals(
+                        categoria_orcamento=category
+                    )
+                totals[category].add_item(item)
+
+    return [
+        totals[category].to_row()
+        for category in sorted(
+            totals,
+            key=lambda name: (
+                -totals[name].orcamento_contratado,
+                name.casefold(),
+            ),
+        )
+    ]
+
+
 def _readable_category(value: object) -> str:
     description = _text(value).casefold()
     if not description:

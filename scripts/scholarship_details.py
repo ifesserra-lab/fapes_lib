@@ -93,6 +93,52 @@ def load_scholarship_details(
     ]
 
 
+def load_researcher_scholarship_details(
+    input_dir: str | Path,
+    researcher_query: str,
+    *,
+    include_excluded_projects: bool = False,
+    selected_statuses: Sequence[str] = (),
+) -> list[ScholarshipDetailRow]:
+    """Aggregate scholarship quantity and amount for researcher/coordinator projects."""
+
+    normalized_query = researcher_query.casefold().strip()
+    if not normalized_query:
+        return []
+
+    totals: dict[str, ScholarshipDetailTotals] = {}
+    for path in sorted(Path(input_dir).glob("*.json")):
+        for projeto in _projects_from_file(path):
+            if _should_skip_project(
+                projeto,
+                include_excluded_projects,
+                selected_statuses,
+            ):
+                continue
+            if (
+                normalized_query
+                not in _text(projeto.get("coordenador_nome")).casefold()
+            ):
+                continue
+
+            for item in _envelope_records(projeto.get("quadroBolsas")):
+                key = _scholarship_type(item)
+                if key not in totals:
+                    totals[key] = ScholarshipDetailTotals(
+                        tipo_bolsa=key,
+                        nome_bolsa=_scholarship_name(item),
+                    )
+                totals[key].add_item(item)
+
+    return [
+        totals[key].to_row()
+        for key in sorted(
+            totals,
+            key=lambda value: (-totals[value].valor_bolsas, value.casefold()),
+        )
+    ]
+
+
 def _scholarship_type(item: Mapping[str, object]) -> str:
     return _text(item.get("sigla")) or _scholarship_name(item)
 

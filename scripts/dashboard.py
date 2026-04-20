@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Any, Final, TypeAlias, cast
 from unicodedata import combining, normalize
 
-from scripts.budget_categories import load_budget_categories
+from scripts.budget_categories import (
+    load_budget_categories,
+    load_researcher_budget_categories,
+)
 from scripts.project_details import (
     build_project_timeline,
     load_project_details,
@@ -29,7 +32,10 @@ from scripts.report import (
     load_project_status_options,
     summarize_researcher_scholarships,
 )
-from scripts.scholarship_details import load_scholarship_details
+from scripts.scholarship_details import (
+    load_researcher_scholarship_details,
+    load_scholarship_details,
+)
 
 ReportRow: TypeAlias = dict[str, object]
 
@@ -1010,6 +1016,18 @@ def _render_researcher_page(
         return
 
     timeline_rows = build_project_timeline(filtered_project_rows)
+    budget_detail_rows = load_researcher_budget_categories(
+        input_dir,
+        researcher_query,
+        include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
+    )
+    scholarship_detail_rows = load_researcher_scholarship_details(
+        input_dir,
+        researcher_query,
+        include_excluded_projects=include_excluded_projects,
+        selected_statuses=selected_statuses,
+    )
     total_budget = sum(
         (_decimal(row.get(_BUDGET_COLUMN)) for row in filtered_project_rows),
         Decimal("0"),
@@ -1074,6 +1092,27 @@ def _render_researcher_page(
                 show_values=show_chart_values,
             )
             _render_sortable_dataframe(st, financial_timeline_table_frame)
+
+    detail_left, detail_right = st.columns(2)
+    with detail_left:
+        st.subheader("Rubricas do orcamento contratado")
+        budget_detail_frame = pd.DataFrame(
+            _budget_detail_table_rows(budget_detail_rows)
+        )
+        if budget_detail_frame.empty:
+            st.info("Nenhuma rubrica de orcamento encontrada para o pesquisador.")
+        else:
+            _render_sortable_dataframe(st, budget_detail_frame)
+
+    with detail_right:
+        st.subheader("Bolsas contratadas")
+        scholarship_details_frame = pd.DataFrame(
+            _scholarship_detail_table_rows(scholarship_detail_rows)
+        )
+        if scholarship_details_frame.empty:
+            st.info("Nenhuma bolsa encontrada para o pesquisador.")
+        else:
+            _render_sortable_dataframe(st, scholarship_details_frame)
 
     st.subheader("Projetos")
     project_frame = pd.DataFrame(_researcher_project_table_rows(filtered_project_rows))
@@ -1851,6 +1890,19 @@ def _scholarship_detail_table_rows(
             "Nome da bolsa": row.get("nome_bolsa", ""),
             "Quantidade": _int_value(row.get(_SCHOLARSHIPS_COLUMN)),
             "Valor contratado": _currency_label(row.get(_SCHOLARSHIP_AMOUNT_COLUMN)),
+            "Lancamentos": _int_value(row.get("total_lancamentos")),
+        }
+        for row in rows
+    ]
+
+
+def _budget_detail_table_rows(
+    rows: Sequence[Mapping[str, object]],
+) -> list[ReportRow]:
+    return [
+        {
+            "Rubrica": row.get(_BUDGET_CATEGORY_COLUMN, ""),
+            "Orcamento contratado": _currency_label(row.get(_BUDGET_COLUMN)),
             "Lancamentos": _int_value(row.get("total_lancamentos")),
         }
         for row in rows
