@@ -416,7 +416,7 @@ def test_dashboard_filters_and_summarizes_scholarship_allocations(
             ),
             "Bolsas pagas": 2,
             "Valor alocado": "R$ 1.400,00",
-            "Valor pago": "R$ 1.400,50",
+            "Valor pago": "R$ 700,00",
         }
     ]
     assert table_rows == [
@@ -435,7 +435,7 @@ def test_dashboard_filters_and_summarizes_scholarship_allocations(
             "Bolsas pagas": 2,
             "Valor alocado": "R$ 1.400,00",
             "Pagamentos": 2,
-            "Valor pago": "R$ 1.400,50",
+            "Valor pago": "R$ 700,00",
         }
     ]
 

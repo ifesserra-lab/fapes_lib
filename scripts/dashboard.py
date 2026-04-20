@@ -1544,7 +1544,10 @@ def _scholarship_allocation_table_rows(
             ),
             "Pagamentos": _int_value(row.get("pagamentos")),
             "Valor pago": _currency_label(
-                row.get(_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN)
+                _calculated_scholarship_allocation_paid_amount(
+                    row.get(_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN),
+                    row.get("qtd_bolsas_paga"),
+                )
             ),
         }
         for row in rows
@@ -1634,11 +1637,25 @@ def _scholarship_allocation_summary_table_rows(
                 row.get(_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN)
             ),
             "Valor pago": _currency_label(
-                row.get(_SCHOLARSHIP_ALLOCATION_PAID_AMOUNT_COLUMN)
+                _calculated_scholarship_allocation_paid_amount(
+                    row.get(_SCHOLARSHIP_ALLOCATION_ALLOCATED_AMOUNT_COLUMN),
+                    row.get("bolsas_pagas"),
+                )
             ),
         }
         for row in rows
     ]
+
+
+def _calculated_scholarship_allocation_paid_amount(
+    allocated_amount: object,
+    paid_scholarships: object,
+) -> Decimal:
+    quantity = _int_value(paid_scholarships)
+    if quantity <= 0:
+        return Decimal("0")
+
+    return _decimal(allocated_amount) / Decimal(quantity)
 
 
 def _top_scholarship_allocation_holder_rows(
