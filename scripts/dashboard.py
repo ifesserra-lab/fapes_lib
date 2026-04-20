@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Final, TypeAlias, cast
+from unicodedata import combining, normalize
 
 from scripts.budget_categories import load_budget_categories
 from scripts.project_details import (
@@ -1090,6 +1091,7 @@ def _render_scholarship_allocations_page(
     with st.sidebar:
         st.header("Filtros dos bolsistas")
         allocation_query = st.text_input("Buscar bolsista, projeto ou responsavel")
+        allocation_institution_query = st.text_input("Buscar instituicao")
         selected_institutions = st.multiselect(
             "Instituicao",
             options=_scholarship_allocation_institution_options(rows),
@@ -1113,6 +1115,7 @@ def _render_scholarship_allocations_page(
         selected_institutions=selected_institutions,
         selected_scholarship_types=selected_scholarship_types,
         query=allocation_query,
+        institution_query=allocation_institution_query,
     )
     totals = _scholarship_allocation_totals(filtered_rows)
 
@@ -1456,6 +1459,7 @@ def _filter_scholarship_allocation_rows(
     selected_institutions: Sequence[str] = (),
     selected_scholarship_types: Sequence[str] = (),
     query: str = "",
+    institution_query: str = "",
 ) -> list[ReportRow]:
     selected_institution_set = set(selected_institutions)
     selected_type_set = set(selected_scholarship_types)
@@ -1464,6 +1468,11 @@ def _filter_scholarship_allocation_rows(
         if (
             selected_institution_set
             and _institution_label(row) not in selected_institution_set
+        ):
+            continue
+        if institution_query and not _scholarship_allocation_matches_institution_query(
+            row,
+            institution_query,
         ):
             continue
         if (
@@ -1660,6 +1669,25 @@ def _scholarship_allocation_matches_query(
     )
 
 
+def _scholarship_allocation_matches_institution_query(
+    row: Mapping[str, object],
+    query: str,
+) -> bool:
+    normalized_query = _normalized_search_text(query)
+    if not normalized_query:
+        return True
+
+    searchable_values = (
+        row.get("instituicao_nome"),
+        row.get("instituicao_sigla"),
+        _institution_label(row),
+    )
+    return any(
+        normalized_query in _normalized_search_text(value)
+        for value in searchable_values
+    )
+
+
 def _scholarship_allocation_type_label(row: Mapping[str, object]) -> str:
     acronym = str(row.get("bolsa_sigla", "")).strip()
     name = str(row.get("bolsa_nome", "")).strip()
@@ -1682,6 +1710,17 @@ def _scholarship_allocation_project_label(row: Mapping[str, object]) -> str:
 
 def _join_labels(labels: set[str]) -> str:
     return "; ".join(sorted((label for label in labels if label), key=str.casefold))
+
+
+def _normalized_search_text(value: object) -> str:
+    decomposed = normalize("NFKD", str(value or ""))
+    without_accents = "".join(
+        character for character in decomposed if not combining(character)
+    )
+    searchable = "".join(
+        character if character.isalnum() else " " for character in without_accents
+    )
+    return " ".join(searchable.casefold().split())
 
 
 def _json_payload(rows: Sequence[Mapping[str, object]]) -> bytes:

@@ -383,6 +383,10 @@ def test_dashboard_filters_and_summarizes_scholarship_allocations(
         selected_scholarship_types=["ICT | Iniciacao Cientifica"],
         query="aluno",
     )
+    filtered_by_institution_query = dashboard._filter_scholarship_allocation_rows(
+        rows,
+        institution_query="ufes vitoria",
+    )
     totals = dashboard._scholarship_allocation_totals(filtered_rows)
     summary_rows = dashboard._scholarship_allocation_holder_summary_rows(filtered_rows)
     summary_table_rows = dashboard._scholarship_allocation_summary_table_rows(
@@ -400,6 +404,7 @@ def test_dashboard_filters_and_summarizes_scholarship_allocations(
     assert totals.total_paid_scholarships == 2
     assert totals.total_allocated_amount == "1.400,00"
     assert totals.total_paid_amount == "1.400,50"
+    assert filtered_by_institution_query == [rows[0]]
     assert summary_table_rows == [
         {
             "Bolsista": "Aluno Bolsista",
